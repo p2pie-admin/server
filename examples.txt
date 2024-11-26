@@ -1,0 +1,77 @@
+[
+  {
+    "exchangerId": 858,
+    "name": "InternetMoney",
+    "course": 1.0208950661294331e-7,
+    "min": { "give": 0.23, "get": 2252924.9834854202 },
+    "max": { "give": 7.033967005631794, "get": 68900000 },
+    "reserve": { "give": 7.033967005631794, "get": 68900000 },
+    "parameterCodes": ["delivery"],
+    "ref_link": "https://internetmoney.exchange",
+    "cityRates": {
+      "KZN": {
+        "rate": {
+          "exchangerId": 858,
+          "name": "InternetMoney",
+          "course": 1.0214053952264292e-7,
+          "min": { "give": 0.23, "get": 2251799.34504862 },
+          "max": { "give": 7.03748317, "get": 68899999.9695508 },
+          "reserve": { "give": 7.037483173110098, "get": 68900000 },
+          "parameterCodes": ["delivery"],
+          "ref_link": "https://internetmoney.exchange",
+          "last_time_updated": 1732645566465
+        },
+        "city": {
+          "codes": ["KZN"],
+          "en_name": "Kazan",
+          "ru_name": "Казань",
+          "population": 3,
+          "coordinates": [55.7941, 49.1115],
+          "preposition": "Казани",
+          "closest_cities": ["CIP", "JOK", "YOLA"],
+          "en_country_name": "Russia",
+          "ru_country_name": "Россия"
+        }
+      }
+    },
+    "last_time_updated": 1732645566465
+  },
+  {
+    "exchangerId": 1140,
+    "name": "GoldObmen",
+    "course": 1.021387360350139e-7,
+    "min": { "give": 0.162, "get": 1586077.978725576 },
+    "max": { "give": 5.72916598, "get": 56091999.98359095 },
+    "reserve": { "give": 5.729165981676, "get": 56092000 },
+    "parameterCodes": ["delivery", "manual"],
+    "ref_link": "https://goldobmen.com",
+    "cityRates": {},
+    "last_time_updated": 1732648749179
+  },
+  {
+    "exchangerId": 1073,
+    "name": "КэшБанк",
+    "from_fee": "1%",
+    "course": 1.0279353446411829e-7,
+    "min": { "give": 0.1541903, "get": 1499999.9834991817 },
+    "max": { "give": 2.56983836, "get": 24999999.98440605 },
+    "reserve": { "give": 40.49037322541619, "get": 393900000 },
+    "parameterCodes": ["manual,delivery"],
+    "ref_link": "https://cashbank.pro",
+    "cityRates": {
+      "ARKH": {
+        "exchangerId": 1073,
+        "name": "КэшБанк",
+        "from_fee": "1%",
+        "course": 1.0279353446411829e-7,
+        "min": { "give": 0.1541903, "get": 1499999.9834991817 },
+        "max": { "give": 2.56983836, "get": 24999999.98440605 },
+        "reserve": { "give": 40.891268009826256, "get": 397800000 },
+        "parameterCodes": ["manual,delivery"],
+        "ref_link": "https://cashbank.pro",
+        "last_time_updated": 1732652558253
+      }
+    },
+    "last_time_updated": 1732652558253
+  }
+]
