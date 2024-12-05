@@ -10,6 +10,7 @@ import { IExchanger } from "./types/exchanger";
 import { IAllDirsRates, IRate } from "./types/rates";
 import { DirData, ICity } from "./types";
 import { getPopularRates, getSimilarRates } from "./getPopularRates";
+import { convertCitiesToSelector } from "./helper";
 
 dotenv.config();
 
@@ -79,14 +80,29 @@ server.get("/city_selector", async function (_, reply) {
   const cities = (await getData("parser_setting"))?.cities as
     | ICity[]
     | undefined;
-  // reply.send(JSON.stringify(convertCitiesToSelector(cities)));
+  reply.send(JSON.stringify(convertCitiesToSelector(cities)));
+});
+
+server.get("/cities", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const cities = (await getData("parser_setting"))?.cities as
+    | ICity[]
+    | undefined;
+  reply.send(JSON.stringify(cities));
 });
 
 server.get("/city=:name", async function (request, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const { name } = request.params as { name: string };
-  const cities = (await getObject("cities")) as ICity[];
-  reply.send(JSON.stringify(await getData("errors")));
+  const cities = (await getData("parser_setting"))?.cities as
+    | ICity[]
+    | undefined;
+  if (!cities || !name) reply.send(null);
+  reply.send(
+    JSON.stringify(
+      cities?.find((c) => c.en_name.toLowerCase() == name?.toLowerCase())
+    )
+  );
 });
 
 // server.get("/top", async function (_, reply) {
@@ -156,13 +172,17 @@ server.get(
 server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const { code, city } = request.params;
-  console.log(code, city);
   const rates = (await getData(`allDirTops:${code}`)) as IRate[];
   if (!rates) return [];
-  if (!city) rates;
+  const now = Date.now();
+  const newRates = rates.filter(
+    (r) => r.last_time_updated && now - r.last_time_updated < 1000 * 60 * 1000
+  );
+
+  if (!city) return JSON.stringify(newRates);
   return JSON.stringify(
-    rates.reduce((res: IRate[], r) => {
-      const cityRate = r.cityRates?.[city.toUpperCase()];
+    newRates.reduce((res: IRate[], r) => {
+      const cityRate = r.cityRates?.[city.toLowerCase()];
       if (!cityRate) return res;
       return [...res, cityRate];
     }, [])
