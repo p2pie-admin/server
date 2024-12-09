@@ -1,5 +1,6 @@
 import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
+import { IAllDirsRates } from "./types/rates";
 
 const countryWeights = {
   Russia: 5,
@@ -12,11 +13,28 @@ const countryWeights = {
   Uzbekistan: 2,
 } as any;
 
-export function convertCitiesToSelector(cities?: ICity[]): ISelectorCountry[] {
+export function convertCitiesToSelector(
+  cities?: ICity[],
+  allDirRates?: IAllDirsRates
+): ISelectorCountry[] {
   // Group cities by country
   const groupedByCountry: Record<string, ISelectorCountry> = {};
-  if (!cities) return [];
+
+  if (!cities || !allDirRates) return [];
   for (const city of cities) {
+    const cityHasRates = Object.entries(allDirRates).find(
+      ([dir, rates]) =>
+        dir.includes("CASH") &&
+        rates &&
+        Object.values(rates)?.find(
+          (r) =>
+            r.cityRates &&
+            Object.keys(r.cityRates).find(
+              (cityName) => cityName.toLowerCase() == city.en_name.toLowerCase()
+            )
+        )
+    );
+    if (!cityHasRates) continue;
     const countryKey = `${city.en_country_name}-${city.ru_country_name}`;
 
     if (!groupedByCountry[countryKey]) {
@@ -41,3 +59,42 @@ export function convertCitiesToSelector(cities?: ICity[]): ISelectorCountry[] {
   // Convert grouped data into an array
   return Object.values(groupedByCountry);
 }
+
+// export const setCacheData = ({
+//   cache,
+//   key,
+//   data,
+// }: {
+//   cache: Map<any, any>;
+//   key: string;
+//   data: any;
+// }) => {
+//   const now = Date.now();
+//   cache.set(key, { data, timestamp: now });
+// };
+
+// функция кэширует чтобы не делать обращение к базе и не делать вычислений многократно
+export const toCache = async ({
+  cache,
+  key,
+  ttl = 60 * 1000,
+  getData,
+}: {
+  cache: Map<any, any>;
+  key: string;
+  ttl?: number;
+  getData: Function;
+}) => {
+  const now = Date.now();
+  if (cache.has(key)) {
+    const cached = cache.get(key);
+    if (now - cached.timestamp < ttl) {
+      console.log(`Got cache: ${key} | ${ttl / 1000}s`);
+      return cached.data; // Return cached response
+    }
+  }
+  const data = await getData();
+  cache.set(key, { data, timestamp: now });
+  console.log(`Set cache: ${key} | ${ttl / 1000}s`);
+  return data;
+};

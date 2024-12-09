@@ -1,18 +1,17 @@
 import Fastify, { FastifyRequest } from "fastify";
 import dotenv from "dotenv";
 
-//import auth from "./services/auth";
-import callStrapi from "./services/callStrapi";
-import { setData, getData, getObject } from "./redis";
+import { getData, getObject } from "./redis";
 import path from "path";
 import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
 import { IAllDirsRates, IRate } from "./types/rates";
-import { DirData, ICity } from "./types";
+import { ICity } from "./types";
 import { getPopularRates, getSimilarRates } from "./getPopularRates";
-import { convertCitiesToSelector } from "./helper";
+import { convertCitiesToSelector, toCache } from "./helper";
 
 dotenv.config();
+const cache = new Map(); // In-memory cache
 
 const server = Fastify({
   logger: true,
@@ -41,7 +40,9 @@ server.get("/all_pm_codes_that_exist", async function (_, reply) {
 
 server.get("/exchangers", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
+
   const exchangers = await getObject("exchangers");
+
   reply.send(
     JSON.stringify(
       exchangers && Object.keys(exchangers).length
@@ -77,17 +78,29 @@ server.get("/errors", async function (_, reply) {
 
 server.get("/city_selector", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const cities = (await getData("parser_setting"))?.cities as
-    | ICity[]
-    | undefined;
-  reply.send(JSON.stringify(convertCitiesToSelector(cities)));
+  const citySelector = await toCache({
+    cache,
+    key: `city_selector`,
+    ttl: 2 * 60 * 60 * 1000,
+    getData: async () => {
+      const cities = (await getData("parser_setting"))?.cities as
+        | ICity[]
+        | undefined;
+      const allDirRates = (await getObject("allDirRates")) as IAllDirsRates;
+      return convertCitiesToSelector(cities, allDirRates);
+    },
+  });
+
+  reply.send(JSON.stringify(citySelector));
 });
 
 server.get("/cities", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
+
   const cities = (await getData("parser_setting"))?.cities as
     | ICity[]
     | undefined;
+
   reply.send(JSON.stringify(cities));
 });
 
@@ -105,23 +118,6 @@ server.get("/city=:name", async function (request, reply) {
   );
 });
 
-// server.get("/top", async function (_, reply) {
-//   reply.header("Access-Control-Allow-Origin", "*");
-//   const bestRates = getPopularRates();
-//   reply.send(JSON.stringify(bestRates));
-// });
-
-// server.get("/similar/dirs=:dirsString", async function (request, reply) {
-//   reply.header("Access-Control-Allow-Origin", "*");
-//   const { dirsString } = request.params as { dirsString: string };
-//   const dirs = dirsString.split(",");
-//   if (!dirs || !dirs.length) {
-//     reply.send("wrong dirs, try /similar/dirs=BTC_SBERRUB,BTC_TCSBRUB");
-//     return;
-//   }
-//   reply.send(JSON.stringify(getSimilarRates(dirs)));
-// });
-
 server.get("/test_rates", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
@@ -132,19 +128,25 @@ server.get("/test_rates", async function (_, reply) {
 
 server.get("/dirs", async (_, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
-  const allDirRates = (await getObject("allDirRates")) as IAllDirsRates;
-  const totalRatesByDir = Object.entries(allDirRates).reduce(
-    (res: { [key: string]: number }, [code, dirRate]) => {
-      res = { ...res, [code]: Object.keys(dirRate).length };
-      return res;
+  const dirs = await toCache({
+    cache,
+    key: "dirs",
+    getData: async () => {
+      const allDirRates = (await getObject("allDirRates")) as IAllDirsRates;
+      const totalRatesByDir = Object.entries(allDirRates).reduce(
+        (res: { [key: string]: number }, [code, dirRate]) => {
+          res = { ...res, [code]: Object.keys(dirRate).length };
+          return res;
+        },
+        {}
+      );
+      const sortedArray = Object.entries(totalRatesByDir)
+        .sort(([, valueA], [, valueB]) => valueA - valueB)
+        .reverse();
+      return Object.fromEntries(sortedArray);
     },
-    {}
-  );
-  const sortedArray = Object.entries(totalRatesByDir)
-    .sort(([, valueA], [, valueB]) => valueA - valueB)
-    .reverse();
-  const res = Object.fromEntries(sortedArray);
-  reply.send(JSON.stringify(res));
+  });
+  reply.send(JSON.stringify(dirs));
 });
 
 type dirReq = FastifyRequest<{ Params: { code: string; city: string } }>;
@@ -172,22 +174,31 @@ server.get(
 server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const { code, city } = request.params;
-  const rates = (await getData(`allDirTops:${code}`)) as IRate[];
-  if (!rates) return [];
-  const now = Date.now();
-  const newRates = rates.filter(
-    (r) => r.last_time_updated && now - r.last_time_updated < 1000 * 60 * 1000
-  );
 
-  if (!city) return JSON.stringify(newRates);
-  return JSON.stringify(
-    newRates.reduce((res: IRate[], r) => {
-      const cityRate = r.cityRates?.[city.toLowerCase()];
-      if (!cityRate) return res;
-      return [...res, cityRate];
-    }, [])
-  );
+  const rates = await toCache({
+    cache,
+    key: `rates_${code}_${city}`,
+    ttl: 30 * 1000,
+    getData: async () => {
+      const rates = (await getData(`allDirTops:${code}`)) as IRate[];
+      if (!rates) return [];
+      const now = Date.now();
+      const newRates = rates.filter(
+        (r) =>
+          r.last_time_updated && now - r.last_time_updated < 1000 * 60 * 1000
+      );
 
+      if (!city) return JSON.stringify(newRates);
+
+      return newRates.reduce((res: IRate[], r) => {
+        const cityRate = r.cityRates?.[city.toLowerCase()];
+        if (!cityRate) return res;
+        return [...res, cityRate];
+      }, []);
+    },
+  });
+
+  reply.send(JSON.stringify(rates));
   //JSON.stringify(
 });
 
