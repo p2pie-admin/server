@@ -76,8 +76,9 @@ server.get("/errors", async function (_, reply) {
   reply.send(JSON.stringify(await getData("errors")));
 });
 
-server.get("/city_selector", async function (_, reply) {
+server.get("/city_selector=:dir", async function (request, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
+  const { dir } = request.params as { dir: string };
   const citySelector = await toCache({
     cache,
     key: `city_selector`,
@@ -86,8 +87,8 @@ server.get("/city_selector", async function (_, reply) {
       const cities = (await getData("parser_setting"))?.cities as
         | ICity[]
         | undefined;
-      const allDirRates = (await getObject("allDirRates")) as IAllDirsRates;
-      return convertCitiesToSelector(cities, allDirRates);
+      const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
+      return convertCitiesToSelector(dir, cities, allDirTops);
     },
   });
 

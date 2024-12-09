@@ -14,26 +14,23 @@ const countryWeights = {
 } as any;
 
 export function convertCitiesToSelector(
+  dir: string,
   cities?: ICity[],
-  allDirRates?: IAllDirsRates
+  allDirTops?: IAllDirsRates
 ): ISelectorCountry[] {
   // Group cities by country
   const groupedByCountry: Record<string, ISelectorCountry> = {};
 
-  if (!cities || !allDirRates) return [];
+  if (!cities || !allDirTops) return [];
   for (const city of cities) {
-    const cityHasRates = Object.entries(allDirRates).find(
-      ([dir, rates]) =>
-        dir.includes("CASH") &&
-        rates &&
-        Object.values(rates)?.find(
-          (r) =>
-            r.cityRates &&
-            Object.keys(r.cityRates).find(
-              (cityName) => cityName.toLowerCase() == city.en_name.toLowerCase()
-            )
+    const cityHasRates = Object.values(allDirTops?.[dir])?.find(
+      (r) =>
+        r.cityRates &&
+        Object.keys(r.cityRates).find(
+          (cityName) => cityName.toLowerCase() == city.en_name.toLowerCase()
         )
     );
+
     if (!cityHasRates) continue;
     const countryKey = `${city.en_country_name}-${city.ru_country_name}`;
 
