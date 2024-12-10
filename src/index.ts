@@ -105,18 +105,35 @@ server.get("/cities", async function (_, reply) {
   reply.send(JSON.stringify(cities));
 });
 
-server.get("/city=:name", async function (request, reply) {
+server.get("/non_empty_cities", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const { name } = request.params as { name: string };
+
   const cities = (await getData("parser_setting"))?.cities as
     | ICity[]
     | undefined;
-  if (!cities || !name) reply.send(null);
-  reply.send(
-    JSON.stringify(
-      cities?.find((c) => c.en_name.toLowerCase() == name?.toLowerCase())
-    )
-  );
+  if (!cities) reply.send(null);
+
+  const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
+  const nonEmpty = cities?.reduce((res, city) => {
+    const dirRatesTotal = Object.entries(allDirTops).reduce(
+      (res, [dir, dirRates]) => {
+        const totalByCity = Object.values(dirRates).filter(
+          (r) =>
+            r.cityRates &&
+            Object.keys(r.cityRates).find(
+              (cen) => cen.toLowerCase() == city?.en_name.toLowerCase()
+            )
+        ).length;
+        return totalByCity ? { ...res, [dir]: totalByCity } : res;
+      },
+      {}
+    );
+    return Object.keys(dirRatesTotal).length
+      ? { ...res, [city.en_name.toLowerCase()]: dirRatesTotal }
+      : res;
+  }, {});
+
+  reply.send(JSON.stringify(nonEmpty));
 });
 
 server.get("/test_rates", async function (_, reply) {
