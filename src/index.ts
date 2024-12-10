@@ -189,7 +189,7 @@ server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
           r.last_time_updated && now - r.last_time_updated < 1000 * 60 * 1000
       );
 
-      if (!city) return JSON.stringify(newRates);
+      if (!city) return newRates;
 
       return newRates.reduce((res: IRate[], r) => {
         const cityRate = r.cityRates?.[city.toLowerCase()];
@@ -200,7 +200,6 @@ server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
   });
 
   reply.send(JSON.stringify(rates));
-  //JSON.stringify(
 });
 
 server.get("/similar/dirs=:dirsString", async function (request, reply) {
