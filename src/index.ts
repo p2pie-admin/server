@@ -26,6 +26,33 @@ server.get("/", (request, reply) => {
   reply.sendFile("index.html"); // Automatically serve index.html
 });
 
+server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const { code, city } = request.params;
+
+  const rates = await toCache({
+    cache,
+    key: `rates_${code}_${city}`,
+    ttl: 30 * 1000,
+    getData: async () => {
+      const rates = (await getData(`allDirTops:${code}`)) as IRate[];
+      if (!rates) return [];
+      const now = Date.now();
+      const newRates = rates.filter(
+        (r) => r.last_time_updated && now - r.last_time_updated < 1000 * 300
+      );
+
+      return newRates.reduce((res: IRate[], r) => {
+        const cityRate = r.cityRates?.[city.toLowerCase()];
+        if (!cityRate) return res;
+        return [...res, cityRate];
+      }, []);
+    },
+  });
+
+  reply.send(JSON.stringify(rates));
+});
+
 server.get("/top_codes", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const topCodes = await getData("top_codes");
@@ -136,6 +163,21 @@ server.get("/non_empty_cities", async function (_, reply) {
   reply.send(JSON.stringify(nonEmpty));
 });
 
+server.get("/city=:name", async function (request, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const { name } = request.params as { name: string };
+  const cities = (await getData("parser_setting"))?.cities as
+    | ICity[]
+    | undefined;
+  if (!cities) reply.send(null);
+
+  reply.send(
+    JSON.stringify(
+      cities?.find((c) => c.en_name.toLowerCase() == name.toLowerCase())
+    )
+  );
+});
+
 server.get("/test_rates", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
@@ -188,36 +230,6 @@ server.get(
     reply.send(JSON.stringify(pp?.[code?.toUpperCase()] || null));
   }
 );
-
-server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
-  reply.header("Access-Control-Allow-Origin", "*");
-  const { code, city } = request.params;
-
-  const rates = await toCache({
-    cache,
-    key: `rates_${code}_${city}`,
-    ttl: 30 * 1000,
-    getData: async () => {
-      const rates = (await getData(`allDirTops:${code}`)) as IRate[];
-      if (!rates) return [];
-      const now = Date.now();
-      const newRates = rates.filter(
-        (r) =>
-          r.last_time_updated && now - r.last_time_updated < 1000 * 60 * 1000
-      );
-
-      if (!city) return newRates;
-
-      return newRates.reduce((res: IRate[], r) => {
-        const cityRate = r.cityRates?.[city.toLowerCase()];
-        if (!cityRate) return res;
-        return [...res, cityRate];
-      }, []);
-    },
-  });
-
-  reply.send(JSON.stringify(rates));
-});
 
 server.get("/similar/dirs=:dirsString", async function (request, reply) {
   reply.header("Access-Control-Allow-Origin", "*");

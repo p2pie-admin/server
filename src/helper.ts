@@ -23,15 +23,15 @@ export function convertCitiesToSelector(
 
   if (!cities || !allDirTops) return [];
   for (const city of cities) {
-    const cityHasRates = Object.values(allDirTops?.[dir])?.find(
+    const totalCityRates = Object.values(allDirTops?.[dir])?.filter(
       (r) =>
         r.cityRates &&
         Object.keys(r.cityRates).find(
           (cityName) => cityName.toLowerCase() == city.en_name.toLowerCase()
         )
-    );
+    ).length;
 
-    if (!cityHasRates) continue;
+    if (totalCityRates < 2) continue; // убираем одиночек
     const countryKey = `${city.en_country_name}-${city.ru_country_name}`;
 
     if (!groupedByCountry[countryKey]) {
@@ -48,6 +48,7 @@ export function convertCitiesToSelector(
       en_name: city.en_name,
       ru_name: city.ru_name,
       population: city.population,
+      totalCityRates,
     });
 
     // Update the weight (sum of populations)

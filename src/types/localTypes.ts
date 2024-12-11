@@ -9,4 +9,5 @@ export interface ISelectorCity {
   en_name: string;
   ru_name: string;
   population: number;
+  totalCityRates: number;
 }
