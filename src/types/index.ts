@@ -8,7 +8,7 @@ export interface ICity {
   population: number;
   coordinates: number[];
   preposition: string;
-  closest_cities: string[];
+  closest_cities: { en_name: string; ru_name: string }[];
   en_country_name: string;
   ru_country_name: string;
 }

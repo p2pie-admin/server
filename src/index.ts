@@ -11,6 +11,7 @@ import { getPopularRates, getSimilarRates } from "./getPopularRates";
 import { convertCitiesToSelector, toCache } from "./helper";
 
 dotenv.config();
+const ratesTTL = process.env.NODE_ENV === "production" ? 1000 * 300 : 10 ** 10;
 const cache = new Map(); // In-memory cache
 
 const server = Fastify({
@@ -22,7 +23,7 @@ server.register(fastifyStatic, {
   prefix: "/", // Optional: serve under a specific prefix
 });
 
-server.get("/", (request, reply) => {
+server.get("/", (_, reply) => {
   reply.sendFile("index.html"); // Automatically serve index.html
 });
 
@@ -39,8 +40,9 @@ server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
       if (!rates) return [];
       const now = Date.now();
       const newRates = rates.filter(
-        (r) => r.last_time_updated && now - r.last_time_updated < 1000 * 300
+        (r) => r.last_time_updated && now - r.last_time_updated < 1000000000
       );
+      if (!city) return newRates;
 
       return newRates.reduce((res: IRate[], r) => {
         const cityRate = r.cityRates?.[city.toLowerCase()];
