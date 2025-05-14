@@ -34,16 +34,30 @@ server.get("/example", async function (_, reply) {
 
   const exampleData = await Promise.all(
     keys.map(async (key) => {
-      const value = await getData(key);
+      let raw = await getData(key);
+      let value = raw;
 
-      let sample;
+      // Try parsing if it's a JSON string
+      if (typeof raw === "string") {
+        try {
+          value = JSON.parse(raw);
+        } catch (e) {
+          value = raw; // leave as-is if not JSON
+        }
+      }
+
+      let sample = null;
+
       if (Array.isArray(value)) {
-        sample = value[0]; // first item from array
+        sample = value[0] ?? null;
       } else if (value && typeof value === "object") {
-        const firstKey = Object.keys(value)[0];
-        sample = { [firstKey]: value[firstKey] }; // first key-value from object
+        const entries = Object.entries(value);
+        if (entries.length > 0) {
+          const [firstKey, firstValue] = entries[0];
+          sample = { [firstKey]: firstValue };
+        }
       } else {
-        sample = value; // fallback for string, number, etc.
+        sample = value ?? null;
       }
 
       return { key, sample };
