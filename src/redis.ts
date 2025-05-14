@@ -199,6 +199,16 @@ export async function getData(key: string, dbName: IDBName = "main") {
   }
 }
 
+export async function getKeys() {
+  const allKeys = await mainDB.keys("*");
+  const mainKeys = allKeys.map((key) => {
+    const parts = key.split(":");
+    return parts[0];
+  });
+  const uniqueKeys = new Set(mainKeys);
+  return Array.from(uniqueKeys);
+}
+
 // Graceful shutdown for Redis connections
 process.on("SIGINT", async () => {
   await mainDB.quit();

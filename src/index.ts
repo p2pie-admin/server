@@ -1,7 +1,7 @@
 import Fastify, { FastifyRequest } from "fastify";
 import dotenv from "dotenv";
 
-import { getData, getObject } from "./redis";
+import { getData, getKeys, getObject } from "./redis";
 import path from "path";
 import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
@@ -25,6 +25,32 @@ server.register(fastifyStatic, {
 
 server.get("/", (_, reply) => {
   reply.sendFile("index.html"); // Automatically serve index.html
+});
+
+server.get("/example", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+
+  const keys = await getKeys();
+
+  const exampleData = await Promise.all(
+    keys.map(async (key) => {
+      const value = await getData(key);
+
+      let sample;
+      if (Array.isArray(value)) {
+        sample = value[0]; // first item from array
+      } else if (value && typeof value === "object") {
+        const firstKey = Object.keys(value)[0];
+        sample = { [firstKey]: value[firstKey] }; // first key-value from object
+      } else {
+        sample = value; // fallback for string, number, etc.
+      }
+
+      return { key, sample };
+    })
+  );
+
+  reply.send(exampleData);
 });
 
 server.get("/dir=:code/:city?", async function (request: dirReq, reply) {

@@ -47,5 +47,5 @@ export interface DB {
 
 export interface DBRATES {
   allDirsRates: { [key: string]: { [key: string]: IRate } };
-  allDirsTops: { [key: string]: IRate[] };
+  IAllDirsTops: { [key: string]: IRate[] };
 }

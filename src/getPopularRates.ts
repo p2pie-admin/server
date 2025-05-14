@@ -4,7 +4,7 @@ import { IPopularDirs } from "./types/pms";
 import { IAllDirsRates, IRate } from "./types/rates";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const dirRates = (await getObject(`allDirRates:${dir}`)) as {
+  const dirRates = (await getObject(`allDirTops:${dir}`)) as {
     [key: string]: IRate;
   };
 
@@ -21,24 +21,23 @@ const findBestRateByDir = async (dir: string, fiatIndex: number) => {
   return best;
 };
 
-const findBestCourseByDir = async (dir: string) => {
-  const dirRates = (await getData(`allDirTops:${dir}`)) as {
-    [key: string]: IRate;
-  };
-  console.log(dirRates);
-
-  if (!dirRates) return;
-  const [exchangerId, rate] = [...Object.entries(dirRates)].sort(
-    (r1, r2) => r1[1].course - r2[1].course
-  )[0];
-  return [rate.course, Object.keys(dirRates).length];
-};
-
 export const getSimilarRates = async (dirs: string[]) => {
   const results = await Promise.all(
     dirs.map((dir) => findBestCourseByDir(dir))
   );
   return results;
+};
+
+const findBestCourseByDir = async (dir: string) => {
+  const dirRates = (await getData(`allDirTops:${dir}`)) as {
+    [key: string]: IRate;
+  };
+
+  if (!dirRates) return;
+  const [_, rate] = [...Object.entries(dirRates)].sort(
+    (r1, r2) => r1[1].course - r2[1].course
+  )[0];
+  return [rate.course, Object.keys(dirRates).length];
 };
 
 export const getPopularRates = async () => {
@@ -47,7 +46,6 @@ export const getPopularRates = async () => {
   const res = await Object.entries(popularDirs).reduce(
     async (accPromise, [cryptoCode, sides]) => {
       const acc = await accPromise;
-
       const [buyCourses, sellCourses] = await Promise.all([
         Promise.all(sides.buy.map((dir) => findBestRateByDir(dir, 0))),
         Promise.all(sides.sell.map((dir) => findBestRateByDir(dir, 1))),
