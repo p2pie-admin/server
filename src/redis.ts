@@ -209,6 +209,15 @@ export async function getKeys() {
   return Array.from(uniqueKeys);
 }
 
+export function getFirstObjectEntry(
+  obj: Record<string, any>
+): Record<string, any> | null {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+
+  const [firstKey, firstValue] = Object.entries(obj)[0] || [];
+  return firstKey !== undefined ? { [firstKey]: firstValue } : null;
+}
+
 // Graceful shutdown for Redis connections
 process.on("SIGINT", async () => {
   await mainDB.quit();

@@ -1,7 +1,7 @@
 import Fastify, { FastifyRequest } from "fastify";
 import dotenv from "dotenv";
 
-import { getData, getKeys, getObject } from "./redis";
+import { getData, getFirstObjectEntry, getKeys, getObject } from "./redis";
 import path from "path";
 import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
@@ -34,30 +34,15 @@ server.get("/example", async function (_, reply) {
 
   const exampleData = await Promise.all(
     keys.map(async (key) => {
-      let raw = await getData(key);
-      let value = raw;
+      const value = await getObject(key);
 
-      // Try parsing if it's a JSON string
-      if (typeof raw === "string") {
-        try {
-          value = JSON.parse(raw);
-        } catch (e) {
-          value = raw; // leave as-is if not JSON
-        }
-      }
-
-      let sample = null;
-
+      let sample;
       if (Array.isArray(value)) {
-        sample = value[0] ?? null;
+        sample = value[0]; // first item from array
       } else if (value && typeof value === "object") {
-        const entries = Object.entries(value);
-        if (entries.length > 0) {
-          const [firstKey, firstValue] = entries[0];
-          sample = { [firstKey]: firstValue };
-        }
+        sample = getFirstObjectEntry(value);
       } else {
-        sample = value ?? null;
+        sample = value; // fallback for string, number, etc.
       }
 
       return { key, sample };
