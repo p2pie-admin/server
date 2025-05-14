@@ -37,4 +37,4 @@ export interface IRate {
 export type ExchangerId = string;
 
 export type IAllDirsRates = { [key: string]: { [key: string]: IRate } };
-export type IAllDirsTops = { [key: string]: IRate[] };
+export type IAllRates = { [key: string]: IRate[] };

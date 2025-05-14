@@ -4,7 +4,7 @@ import { IPopularDirs } from "./types/pms";
 import { IAllDirsRates, IRate } from "./types/rates";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const dirRates = (await getObject(`allDirTops:${dir}`)) as {
+  const dirRates = (await getObject(`allRates:${dir}`)) as {
     [key: string]: IRate;
   };
 
@@ -29,7 +29,7 @@ export const getSimilarRates = async (dirs: string[]) => {
 };
 
 const findBestCourseByDir = async (dir: string) => {
-  const dirRates = (await getData(`allDirTops:${dir}`)) as {
+  const dirRates = (await getData(`allRates:${dir}`)) as {
     [key: string]: IRate;
   };
 

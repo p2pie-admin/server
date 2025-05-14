@@ -61,7 +61,7 @@ server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
     key: `rates_${code}_${city}`,
     ttl: 30 * 1000,
     getData: async () => {
-      const rates = (await getData(`allDirTops:${code}`)) as IRate[];
+      const rates = (await getData(`allRates:${code}`)) as IRate[];
       if (!rates) return [];
       const now = Date.now();
       const newRates = rates.filter(
@@ -141,8 +141,8 @@ server.get("/city_selector=:dir", async function (request, reply) {
       const cities = (await getData("parser_setting"))?.cities as
         | ICity[]
         | undefined;
-      const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
-      return convertCitiesToSelector(dir, cities, allDirTops);
+      const allRates = (await getObject("allRates")) as IAllDirsRates;
+      return convertCitiesToSelector(dir, cities, allRates);
     },
   });
 
@@ -167,9 +167,9 @@ server.get("/non_empty_cities", async function (_, reply) {
     | undefined;
   if (!cities) reply.send(null);
 
-  const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
+  const allRates = (await getObject("allRates")) as IAllDirsRates;
   const nonEmpty = cities?.reduce((res, city) => {
-    const dirRatesTotal = Object.entries(allDirTops).reduce(
+    const dirRatesTotal = Object.entries(allRates).reduce(
       (res, [dir, dirRates]) => {
         const totalByCity = Object.values(dirRates).filter(
           (r) =>
@@ -207,9 +207,9 @@ server.get("/city=:name", async function (request, reply) {
 
 server.get("/test_rates", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const allDirTops = (await getObject("allDirTops")) as IAllDirsRates;
+  const allRates = (await getObject("allRates")) as IAllDirsRates;
   reply.send(
-    JSON.stringify(Object.fromEntries(Object.entries(allDirTops).slice(0, 20)))
+    JSON.stringify(Object.fromEntries(Object.entries(allRates).slice(0, 20)))
   );
 });
 
@@ -219,8 +219,8 @@ server.get("/dirs", async (_, reply) => {
     cache,
     key: "dirs",
     getData: async () => {
-      const allDirRates = (await getObject("allDirRates")) as IAllDirsRates;
-      const totalRatesByDir = Object.entries(allDirRates).reduce(
+      const dirtyRates = (await getObject("dirtyRates")) as IAllDirsRates;
+      const totalRatesByDir = Object.entries(dirtyRates).reduce(
         (res: { [key: string]: number }, [code, dirRate]) => {
           res = { ...res, [code]: Object.keys(dirRate).length };
           return res;

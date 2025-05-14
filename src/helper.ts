@@ -16,14 +16,14 @@ const countryWeights = {
 export function convertCitiesToSelector(
   dir: string,
   cities?: ICity[],
-  allDirTops?: IAllDirsRates
+  allRates?: IAllDirsRates
 ): ISelectorCountry[] {
   // Group cities by country
   const groupedByCountry: Record<string, ISelectorCountry> = {};
 
-  if (!cities || !allDirTops) return [];
+  if (!cities || !allRates) return [];
   for (const city of cities) {
-    const totalCityRates = Object.values(allDirTops?.[dir])?.filter(
+    const totalCityRates = Object.values(allRates?.[dir])?.filter(
       (r) =>
         r.cityRates &&
         Object.keys(r.cityRates).find(
