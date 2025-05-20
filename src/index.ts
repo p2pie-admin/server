@@ -13,7 +13,7 @@ import { IPopularDirs } from "./types/pms";
 import getPossiblePairs from "./possibleDirs";
 
 dotenv.config();
-const ratesTTL = process.env.NODE_ENV === "production" ? 1000 * 300 : 10 ** 10;
+
 const cache = new Map(); // In-memory cache
 
 const server = Fastify({
@@ -65,8 +65,14 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   const rates = await toCache({
     cache,
     key: `rates_${code}_${city || "no-city"}_${type}`,
-    ttl: 30 * 1,
+    ttl: 30 * 1000,
     getData: async () => {
+      const pause = await getData("parser_setting").then(
+        (data) => data?.pause_between_loops || 10
+      );
+      const ratesTTL =
+        process.env.NODE_ENV === "production" ? 1000 * (10 + pause) : 10 ** 10;
+
       const cleanDirRates = await getCleanDirRates(code, type);
       if (!cleanDirRates) return [];
       const now = Date.now();
@@ -272,13 +278,25 @@ server.get("/similar/dirs=:dirsString", async function (request, reply) {
 
 server.get("/top", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const bestRates = await getPopularRates();
+  const bestRates = await toCache({
+    cache,
+    key: "top",
+    ttl: 2 * 60 * 1000,
+    getData: async () => await getPopularRates(),
+  });
+
   reply.send(JSON.stringify(bestRates));
 });
 
 server.get("/popular_dirs", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const popularDirs = (await getData("popular_dirs")) as IPopularDirs;
+
+  const popularDirs = await toCache({
+    cache,
+    key: "top",
+    ttl: 600 * 1000,
+    getData: async () => (await getData("popular_dirs")) as IPopularDirs,
+  });
   reply.send(JSON.stringify(popularDirs));
 });
 
