@@ -106,15 +106,10 @@ export const getCleanDirRates = async (
     [key: string]: IRate;
   };
   const ratesID = (await getObject(`allRatesID:${dir}`)) as IRatesID;
+  const clean = ratesID?.[type]?.map((id) => dirtyDirRates?.[id]);
 
-  const cleanDirRates = Object.keys(dirtyDirRates).reduce((acc, key) => {
-    if (ratesID?.[type]?.includes(key)) {
-      acc[key] = dirtyDirRates[key];
-    }
-    return acc;
-  }, {} as { [key: string]: IRate });
-
-  return cleanDirRates;
+  console.log("ratesID?.[type]", ratesID?.[type]);
+  return clean;
 };
 
 export const mylog = (

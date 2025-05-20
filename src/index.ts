@@ -61,18 +61,18 @@ type dirReq = FastifyRequest<{
 server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
 
-  const { code, city, type = "all" } = request.params;
+  const { code, city, type } = request.params;
 
   const rates = await toCache({
     cache,
-    key: `rates_${code}_${city || "no-city"}_${type || "all"}`,
-    ttl: 30 * 1000,
+    key: `rates_${code}_${city || "no-city"}_${type}`,
+    ttl: 30 * 1,
     getData: async () => {
       const cleanDirRates = await getCleanDirRates(code, type);
       if (!cleanDirRates) return [];
       const now = Date.now();
       const newRates = Object.values(cleanDirRates).filter(
-        (r) => r.last_time_updated && now - r.last_time_updated < 1000000000
+        (r) => r.last_time_updated && now - r.last_time_updated < ratesTTL
       );
 
       if (!city) return newRates;

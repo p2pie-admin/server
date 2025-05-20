@@ -5,15 +5,16 @@ import { IAllDirtyRates, IRate } from "./types/rates";
 import { getCleanDirRates } from "./helper";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const cleanDirRates = await getCleanDirRates(dir);
+  const cleanDirRates = await getCleanDirRates(dir, "part");
 
   if (!cleanDirRates || Object.keys(cleanDirRates).length === 0) return;
 
-  const [exchangerId, rate] = [...Object.entries(cleanDirRates)].sort(
+  const [_, rate] = [...Object.entries(cleanDirRates)].sort(
     (r1, r2) => r1[1].course - r2[1].course
   )[0];
+
   const best = {
-    exchangerId,
+    exchangerId: rate.exchangerId,
     course: fiatIndex ? 1 / rate.course : rate.course,
     fiat: dir.split("_")[fiatIndex],
   };
