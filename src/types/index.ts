@@ -44,8 +44,3 @@ export interface DB {
   alternative_pm_codes: string[];
   possible_pairs: { [key: string]: string[] };
 }
-
-export interface DBRATES {
-  dirtyRates: { [key: string]: { [key: string]: IRate } };
-  IAllRates: { [key: string]: IRate[] };
-}

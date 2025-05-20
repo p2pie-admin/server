@@ -1,6 +1,7 @@
+import { getObject } from "./redis";
 import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
-import { IAllDirsRates } from "./types/rates";
+import { IAllDirtyRates, IRate, IRatesID } from "./types/rates";
 
 const countryWeights = {
   Russia: 5,
@@ -16,14 +17,14 @@ const countryWeights = {
 export function convertCitiesToSelector(
   dir: string,
   cities?: ICity[],
-  allRates?: IAllDirsRates
+  allDirtyRates?: IAllDirtyRates
 ): ISelectorCountry[] {
   // Group cities by country
   const groupedByCountry: Record<string, ISelectorCountry> = {};
 
-  if (!cities || !allRates) return [];
+  if (!cities || !allDirtyRates) return [];
   for (const city of cities) {
-    const totalCityRates = Object.values(allRates?.[dir])?.filter(
+    const totalCityRates = Object.values(allDirtyRates?.[dir])?.filter(
       (r) =>
         r.cityRates &&
         Object.keys(r.cityRates).find(
@@ -95,4 +96,44 @@ export const toCache = async ({
   cache.set(key, { data, timestamp: now });
   console.log(`Set cache: ${key} | ${ttl / 1000}s`);
   return data;
+};
+
+export const getCleanDirRates = async (
+  dir: string,
+  type: "all" | "part" = "all"
+) => {
+  const dirtyDirRates = (await getObject(`allDirtyRates:${dir}`)) as {
+    [key: string]: IRate;
+  };
+  const ratesID = (await getObject(`allRatesID:${dir}`)) as IRatesID;
+
+  const cleanDirRates = Object.keys(dirtyDirRates).reduce((acc, key) => {
+    if (type === "all" || ratesID.all.includes(key)) {
+      acc[key] = dirtyDirRates[key];
+    }
+    return acc;
+  }, {} as { [key: string]: IRate });
+
+  return cleanDirRates;
+};
+
+export const mylog = (
+  message: string,
+  color:
+    | "error"
+    | "success"
+    | "warning"
+    | "important"
+    | "info"
+    | "hidden" = "info"
+) => {
+  const colors = {
+    error: "📕 \u001b[1;31m",
+    success: "📗 \u001b[1;32m",
+    warning: "📙 \u001b[1;33m",
+    info: "📘 \u001b[1;34m",
+    hidden: "📓 \u001b[1;30m",
+    important: "📔 \u001b[38;5;226m",
+  };
+  console.log(`${colors[color]} ${message}`);
 };

@@ -1,15 +1,15 @@
 import console from "console";
 import { getData, getObject } from "./redis";
 import { IPopularDirs } from "./types/pms";
-import { IAllDirsRates, IRate } from "./types/rates";
+import { IAllDirtyRates, IRate } from "./types/rates";
+import { getCleanDirRates } from "./helper";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const dirRates = (await getObject(`allRates:${dir}`)) as {
-    [key: string]: IRate;
-  };
+  const cleanDirRates = await getCleanDirRates(dir);
 
-  if (!dirRates) return;
-  const [exchangerId, rate] = [...Object.entries(dirRates)].sort(
+  if (!cleanDirRates || Object.keys(cleanDirRates).length === 0) return;
+
+  const [exchangerId, rate] = [...Object.entries(cleanDirRates)].sort(
     (r1, r2) => r1[1].course - r2[1].course
   )[0];
   const best = {
@@ -29,15 +29,13 @@ export const getSimilarRates = async (dirs: string[]) => {
 };
 
 const findBestCourseByDir = async (dir: string) => {
-  const dirRates = (await getData(`allRates:${dir}`)) as {
-    [key: string]: IRate;
-  };
+  const cleanDirRates = await getCleanDirRates(dir);
 
-  if (!dirRates) return;
-  const [_, rate] = [...Object.entries(dirRates)].sort(
+  if (!cleanDirRates || Object.keys(cleanDirRates).length === 0) return;
+  const [_, rate] = [...Object.entries(cleanDirRates)].sort(
     (r1, r2) => r1[1].course - r2[1].course
   )[0];
-  return [rate.course, Object.keys(dirRates).length];
+  return [rate.course, Object.keys(cleanDirRates).length];
 };
 
 export const getPopularRates = async () => {

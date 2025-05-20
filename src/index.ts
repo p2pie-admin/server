@@ -5,10 +5,13 @@ import { getData, getFirstObjectEntry, getKeys, getObject } from "./redis";
 import path from "path";
 import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
-import { IAllDirsRates, IRate } from "./types/rates";
+import { IAllDirtyRates, IRate } from "./types/rates";
 import { ICity } from "./types";
 import { getPopularRates, getSimilarRates } from "./getPopularRates";
-import { convertCitiesToSelector, toCache } from "./helper";
+import { convertCitiesToSelector, getCleanDirRates, toCache } from "./helper";
+import { dir } from "console";
+import { IPopularDirs } from "./types/pms";
+import getPossiblePairs from "./possibleDirs";
 
 dotenv.config();
 const ratesTTL = process.env.NODE_ENV === "production" ? 1000 * 300 : 10 ** 10;
@@ -61,10 +64,10 @@ server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
     key: `rates_${code}_${city}`,
     ttl: 30 * 1000,
     getData: async () => {
-      const rates = (await getData(`allRates:${code}`)) as IRate[];
-      if (!rates) return [];
+      const cleanDirRates = await getCleanDirRates(code);
+      if (!cleanDirRates) return [];
       const now = Date.now();
-      const newRates = rates.filter(
+      const newRates = Object.values(cleanDirRates).filter(
         (r) => r.last_time_updated && now - r.last_time_updated < 1000000000
       );
       if (!city) return newRates;
@@ -141,8 +144,10 @@ server.get("/city_selector=:dir", async function (request, reply) {
       const cities = (await getData("parser_setting"))?.cities as
         | ICity[]
         | undefined;
-      const allRates = (await getObject("allRates")) as IAllDirsRates;
-      return convertCitiesToSelector(dir, cities, allRates);
+      const allDirtyRates = (await getObject(
+        "allDirtyRates"
+      )) as IAllDirtyRates;
+      return convertCitiesToSelector(dir, cities, allDirtyRates);
     },
   });
 
@@ -167,9 +172,9 @@ server.get("/non_empty_cities", async function (_, reply) {
     | undefined;
   if (!cities) reply.send(null);
 
-  const allRates = (await getObject("allRates")) as IAllDirsRates;
+  const allDirtyRates = (await getObject("allDirtyRates")) as IAllDirtyRates;
   const nonEmpty = cities?.reduce((res, city) => {
-    const dirRatesTotal = Object.entries(allRates).reduce(
+    const dirRatesTotal = Object.entries(allDirtyRates).reduce(
       (res, [dir, dirRates]) => {
         const totalByCity = Object.values(dirRates).filter(
           (r) =>
@@ -205,22 +210,16 @@ server.get("/city=:name", async function (request, reply) {
   );
 });
 
-server.get("/test_rates", async function (_, reply) {
-  reply.header("Access-Control-Allow-Origin", "*");
-  const allRates = (await getObject("allRates")) as IAllDirsRates;
-  reply.send(
-    JSON.stringify(Object.fromEntries(Object.entries(allRates).slice(0, 20)))
-  );
-});
-
 server.get("/dirs", async (_, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
   const dirs = await toCache({
     cache,
     key: "dirs",
     getData: async () => {
-      const dirtyRates = (await getObject("dirtyRates")) as IAllDirsRates;
-      const totalRatesByDir = Object.entries(dirtyRates).reduce(
+      const allDirtyRates = (await getObject(
+        "allDirtyRates"
+      )) as IAllDirtyRates;
+      const totalRatesByDir = Object.entries(allDirtyRates).reduce(
         (res: { [key: string]: number }, [code, dirRate]) => {
           res = { ...res, [code]: Object.keys(dirRate).length };
           return res;
@@ -240,21 +239,19 @@ type dirReq = FastifyRequest<{ Params: { code: string; city: string } }>;
 type possiblePairsReq = FastifyRequest<{ Params: { code: string } }>;
 
 server.get(
-  "/possible_pairs",
-  async function (request: possiblePairsReq, reply) {
-    reply.header("Access-Control-Allow-Origin", "*");
-    reply.send(JSON.stringify(await getData(`possible_pairs`)));
-  }
-);
-
-server.get(
   "/possible_pairs/code=:code",
   async function (request: possiblePairsReq, reply) {
     reply.header("Access-Control-Allow-Origin", "*");
     const { code } = request.params as { code: string };
-    if (!code) return null;
-    const pp = (await getData(`possible_pairs`)) as { [key: string]: string[] };
-    reply.send(JSON.stringify(pp?.[code?.toUpperCase()] || null));
+    const possiblePairs = await toCache({
+      cache,
+      key: `possible_pairs`,
+      ttl: 600 * 1000,
+      getData: async () => getPossiblePairs(),
+    });
+
+    if (!code) return reply.send(JSON.stringify(possiblePairs));
+    return reply.send(JSON.stringify(possiblePairs[code] || []));
   }
 );
 
@@ -274,6 +271,12 @@ server.get("/top", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const bestRates = await getPopularRates();
   reply.send(JSON.stringify(bestRates));
+});
+
+server.get("/popular_dirs", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const popularDirs = (await getData("popular_dirs")) as IPopularDirs;
+  reply.send(JSON.stringify(popularDirs));
 });
 
 const port = +process.env.RATES_PORT! || 5000;
