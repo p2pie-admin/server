@@ -100,7 +100,7 @@ export const toCache = async ({
 
 export const getCleanDirRates = async (
   dir: string,
-  type: "all" | "part" = "all"
+  type: "all" | "part" = "part"
 ) => {
   const dirtyDirRates = (await getObject(`allDirtyRates:${dir}`)) as {
     [key: string]: IRate;
@@ -108,7 +108,7 @@ export const getCleanDirRates = async (
   const ratesID = (await getObject(`allRatesID:${dir}`)) as IRatesID;
 
   const cleanDirRates = Object.keys(dirtyDirRates).reduce((acc, key) => {
-    if (type === "all" || ratesID.all.includes(key)) {
+    if (ratesID?.[type]?.includes(key)) {
       acc[key] = dirtyDirRates[key];
     }
     return acc;

@@ -54,22 +54,27 @@ server.get("/example", async function (_, reply) {
 
   reply.send(exampleData);
 });
+type dirReq = FastifyRequest<{
+  Params: { code: string; city: string; type: "all" | "part" };
+}>;
 
-server.get("/dir=:code/:city?", async function (request: dirReq, reply) {
+server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const { code, city } = request.params;
+
+  const { code, city, type = "all" } = request.params;
 
   const rates = await toCache({
     cache,
-    key: `rates_${code}_${city}`,
+    key: `rates_${code}_${city || "no-city"}_${type || "all"}`,
     ttl: 30 * 1000,
     getData: async () => {
-      const cleanDirRates = await getCleanDirRates(code);
+      const cleanDirRates = await getCleanDirRates(code, type);
       if (!cleanDirRates) return [];
       const now = Date.now();
       const newRates = Object.values(cleanDirRates).filter(
         (r) => r.last_time_updated && now - r.last_time_updated < 1000000000
       );
+
       if (!city) return newRates;
 
       return newRates.reduce((res: IRate[], r) => {
@@ -235,7 +240,6 @@ server.get("/dirs", async (_, reply) => {
   reply.send(JSON.stringify(dirs));
 });
 
-type dirReq = FastifyRequest<{ Params: { code: string; city: string } }>;
 type possiblePairsReq = FastifyRequest<{ Params: { code: string } }>;
 
 server.get(
