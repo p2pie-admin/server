@@ -9,7 +9,6 @@ import { IAllDirtyRates, IRate } from "./types/rates";
 import { ICity } from "./types";
 import { getPopularRates, getSimilarRates } from "./getPopularRates";
 import { convertCitiesToSelector, getCleanDirRates, toCache } from "./helper";
-import { dir } from "console";
 import { IPopularDirs } from "./types/pms";
 import getPossiblePairs from "./possibleDirs";
 
@@ -243,13 +242,13 @@ server.get("/dirs", async (_, reply) => {
 type possiblePairsReq = FastifyRequest<{ Params: { code: string } }>;
 
 server.get(
-  "/possible_pairs/code=:code",
+  "/possible_pairs/:code?",
   async function (request: possiblePairsReq, reply) {
     reply.header("Access-Control-Allow-Origin", "*");
-    const { code } = request.params as { code: string };
+    const { code } = request.params as { code?: string };
     const possiblePairs = await toCache({
       cache,
-      key: `possible_pairs`,
+      key: `possible_pairs_${code || "all"}`,
       ttl: 600 * 1000,
       getData: async () => getPossiblePairs(),
     });
