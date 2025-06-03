@@ -70,8 +70,7 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
         (data) => data?.pause_between_loops || 10
       );
       const ratesTTL =
-        process.env.NODE_ENV === "production" ? 1000 * (10 + pause) : 10 ** 10;
-
+        process.env.NODE_ENV === "production" ? 1000 * (300 + pause) : 10 ** 10;
       const cleanDirRates = await getCleanDirRates(code, type);
       if (!cleanDirRates) return [];
       const now = Date.now();
