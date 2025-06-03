@@ -14,7 +14,7 @@ import getPossiblePairs from "./possibleDirs";
 
 dotenv.config();
 
-const cache = new Map(); // In-memory cache
+export const cache = new Map(); // In-memory cache
 
 const server = Fastify({
   logger: true,
@@ -63,7 +63,6 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   const { code, city, type } = request.params;
 
   const rates = await toCache({
-    cache,
     key: `rates_${code}_${city || "no-city"}_${type}`,
     ttl: 30 * 1000,
     getData: async () => {
@@ -147,7 +146,6 @@ server.get("/city_selector=:dir", async function (request, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const { dir } = request.params as { dir: string };
   const citySelector = await toCache({
-    cache,
     key: `city_selector`,
     ttl: 2 * 60 * 60 * 1000,
     getData: async () => {
@@ -223,7 +221,6 @@ server.get("/city=:name", async function (request, reply) {
 server.get("/dirs", async (_, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
   const dirs = await toCache({
-    cache,
     key: "dirs",
     getData: async () => {
       const allDirtyRates = (await getObject(
@@ -253,7 +250,6 @@ server.get(
     reply.header("Access-Control-Allow-Origin", "*");
     const { code } = request.params as { code?: string };
     const possiblePairs = await toCache({
-      cache,
       key: `possible_pairs_${code || "all"}`,
       ttl: 600 * 1000,
       getData: async () => getPossiblePairs(),
@@ -279,7 +275,6 @@ server.get("/similar/dirs=:dirsString", async function (request, reply) {
 server.get("/top", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const bestRates = await toCache({
-    cache,
     key: "top",
     ttl: 2 * 60 * 1000,
     getData: async () => await getPopularRates(),
@@ -292,7 +287,6 @@ server.get("/popular_dirs", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
 
   const popularDirs = await toCache({
-    cache,
     key: "top",
     ttl: 600 * 1000,
     getData: async () => (await getData("popular_dirs")) as IPopularDirs,

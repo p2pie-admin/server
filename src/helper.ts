@@ -2,6 +2,7 @@ import { getObject } from "./redis";
 import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
 import { IAllDirtyRates, IRate, IRatesID } from "./types/rates";
+import { cache } from "./index";
 
 const countryWeights = {
   Russia: 5,
@@ -73,13 +74,12 @@ export function convertCitiesToSelector(
 // };
 
 // функция кэширует чтобы не делать обращение к базе и не делать вычислений многократно
+
 export const toCache = async ({
-  cache,
   key,
   ttl = 60 * 1000,
   getData,
 }: {
-  cache: Map<any, any>;
   key: string;
   ttl?: number;
   getData: Function;
