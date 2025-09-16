@@ -7,10 +7,12 @@ import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
 import { IAllDirtyRates, IRate } from "./types/rates";
 import { ICity } from "./types";
-import { getPopularRates, getSimilarRates } from "./getPopularRates";
+
 import { convertCitiesToSelector, getCleanDirRates, toCache } from "./helper";
 import { IPopularDirs } from "./types/pms";
-import getPossiblePairs from "./possibleDirs";
+import getPossiblePairs from "./possiblePairs";
+import { getSimilarRates, getPopularRates } from "./manyRates";
+import { getCryptoToCurrencyRates } from "./manyRates/cryptoToCurrency";
 
 dotenv.config();
 
@@ -60,7 +62,10 @@ type dirReq = FastifyRequest<{
 server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
 
-  const { code, city, type } = request.params;
+  const params = request.params;
+  const code = params.code.toUpperCase();
+  const city = params.city?.toLowerCase();
+  const type = params.type;
 
   const rates = await toCache({
     key: `rates_${code}_${city || "no-city"}_${type}`,
@@ -241,21 +246,25 @@ server.get("/dirs", async (_, reply) => {
   reply.send(JSON.stringify(dirs));
 });
 
-type possiblePairsReq = FastifyRequest<{ Params: { code: string } }>;
+type possiblePairsReq = FastifyRequest<{
+  Params: { side: "give" | "get"; code: string };
+}>;
 
 server.get(
-  "/possible_pairs/:code?",
+  "/possible_pairs/:side/:code?",
   async function (request: possiblePairsReq, reply) {
     reply.header("Access-Control-Allow-Origin", "*");
-    const { code } = request.params as { code?: string };
+    const param = request.params as { side: "give" | "get"; code?: string };
+    const code = param.code?.toUpperCase();
+    const side = param.side;
+    //const possiblePairs = await getPossiblePairs({ side });
     const possiblePairs = await toCache({
-      key: `possible_pairs_${code || "all"}`,
+      key: `possible_pairs_${code || "all"}_${side}`,
       ttl: 600 * 1000,
-      getData: async () => getPossiblePairs(),
+      getData: async () => getPossiblePairs({ side, code }),
     });
-
-    if (!code) return reply.send(JSON.stringify(possiblePairs));
-    return reply.send(JSON.stringify(possiblePairs[code] || []));
+    // if (!code) return reply.send(JSON.stringify(possiblePairs));
+    return reply.send(JSON.stringify(possiblePairs));
   }
 );
 
@@ -292,6 +301,34 @@ server.get("/popular_dirs", async function (_, reply) {
   });
   reply.send(JSON.stringify(popularDirs));
 });
+
+type ICryptoToCurrencyRequest = FastifyRequest<{
+  Params: { code: string; currency: string; side: "give" | "get" };
+}>;
+server.get(
+  "/crypto=:code/:currency/:side",
+  async function (request: ICryptoToCurrencyRequest, reply) {
+    reply.header("Access-Control-Allow-Origin", "*");
+
+    const params = request.params;
+    const code = params.code.toUpperCase();
+    const currency = params.currency?.toUpperCase();
+    const side = params.side;
+
+    const rates = await toCache({
+      key: `crypto_${code}_${currency}_${side}`,
+      ttl: 30 * 1000,
+      getData: async () => {
+        const res = await getCryptoToCurrencyRates({ code, currency, side });
+        return res;
+      },
+    });
+
+    reply.send(JSON.stringify(rates));
+  }
+);
+
+///
 
 const port = +process.env.RATES_PORT! || 5000;
 

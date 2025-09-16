@@ -107,8 +107,6 @@ export const getCleanDirRates = async (
   };
   const ratesID = (await getObject(`allRatesID:${dir}`)) as IRatesID;
   const clean = ratesID?.[type]?.map((id) => dirtyDirRates?.[id]);
-
-  console.log("ratesID?.[type]", ratesID?.[type]);
   return clean;
 };
 

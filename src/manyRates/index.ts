@@ -1,8 +1,6 @@
-import console from "console";
-import { getData, getObject } from "./redis";
-import { IPopularDirs } from "./types/pms";
-import { IAllDirtyRates, IRate } from "./types/rates";
-import { getCleanDirRates } from "./helper";
+import { getCleanDirRates } from "../helper";
+import { getData } from "../redis";
+import { IPopularDirs } from "../types/pms";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
   const cleanDirRates = await getCleanDirRates(dir, "part");
@@ -40,6 +38,26 @@ const findBestCourseByDir = async (dir: string) => {
 };
 
 export const getPopularRates = async () => {
+  const popularDirs = (await getData("popular_dirs")) as IPopularDirs;
+
+  const res = await Object.entries(popularDirs).reduce(
+    async (accPromise, [cryptoCode, sides]) => {
+      const acc = await accPromise;
+      const [buyCourses, sellCourses] = await Promise.all([
+        Promise.all(sides.buy.map((dir) => findBestRateByDir(dir, 0))),
+        Promise.all(sides.sell.map((dir) => findBestRateByDir(dir, 1))),
+      ]);
+
+      return { ...acc, [cryptoCode]: { buy: buyCourses, sell: sellCourses } };
+    },
+    Promise.resolve({})
+  );
+
+  //console.log(JSON.stringify(res, undefined, 4));
+  return res;
+};
+
+export const getOneCryptoToCurrencyRates = async () => {
   const popularDirs = (await getData("popular_dirs")) as IPopularDirs;
 
   const res = await Object.entries(popularDirs).reduce(
