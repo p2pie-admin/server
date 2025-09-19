@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon",
+    "dev": "concurrently \"redis-server\" \"nodemon\"",
     "start": "node build/index.js",
     "build": "rimraf ./build && tsc"
   },

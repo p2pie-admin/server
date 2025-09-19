@@ -2,7 +2,6 @@ import { type } from "os";
 import { getCleanDirRates } from "../helper";
 import getPossiblePairs from "../possiblePairs";
 import { IRate } from "../types/rates";
-
 export const getCryptoToCurrencyRates = async ({
   code,
   currency,
@@ -19,40 +18,40 @@ export const getCryptoToCurrencyRates = async ({
     | undefined;
   if (!possiblePairs || !possiblePairs.length) return [];
 
-  const currencyPairs = possiblePairs.filter((p) => p.endsWith(currency));
-  if (!currencyPairs.length) return [];
+  const fiatPairs = possiblePairs.filter((p) => p.endsWith(currency));
+  if (!fiatPairs.length) return [];
 
   const ratesByDir: { [dir: string]: IRate[] } = {};
-
   await Promise.all(
-    currencyPairs.map(async (cur_code) => {
+    fiatPairs.map(async (fiatCode) => {
       const dir =
-        side === "give" ? `${code}_${cur_code}` : `${cur_code}_${code}`;
+        side === "give" ? `${code}_${fiatCode}` : `${fiatCode}_${code}`;
       const cleanDirRates = (await getCleanDirRates(dir, "all")) || [];
       ratesByDir[dir] = cleanDirRates;
     })
   );
 
-  // Flatten, strip cityRates & reserve, and attach the proper code depending on side:
   const flatRates = Object.entries(ratesByDir).flatMap(([dir, dirRates]) => {
     const [left, right] = dir.split("_");
-    const codePart = side === "give" ? right : left; // <- FIX: use right for give, left for get
+    const code = side === "give" ? right : left;
     return (dirRates || []).map((rate) => {
-      // remove cityRates and reserve explicitly
       const { cityRates, reserve, ...rest } = rate as any;
-      return { ...rest, code: codePart } as any;
+      return { ...rest, code } as any;
     });
   });
 
-  // Group by exchangerId + course
-  const grouped = new Map<string, any>();
-
+  // custom merge: same exchanger, course difference <0.5% → merge
+  const merged: any[] = [];
   for (const rate of flatRates) {
-    const key = `${rate.exchangerId}_${String(rate.course)}`;
+    const existing = merged.find((m) => {
+      if (m.exchangerId !== rate.exchangerId) return false;
+      const diff =
+        Math.abs(m.course - rate.course) / ((m.course + rate.course) / 2);
+      return diff < 0.01; // 1%
+    });
 
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        // shallow clone important fields; we'll keep the rest from the first encountered rate
+    if (!existing) {
+      merged.push({
         exchangerId: rate.exchangerId,
         name: rate.name,
         admin_rating: rate.admin_rating,
@@ -63,22 +62,22 @@ export const getCryptoToCurrencyRates = async ({
           : [],
         ref_link: rate.ref_link,
         last_time_updated: rate.last_time_updated,
-        // min/max — copy
-        min: { ...(rate.min || {}) },
-        max: { ...(rate.max || {}) },
+        min: rate.min ? { ...rate.min } : null,
+        max: rate.max ? { ...rate.max } : null,
         codes: [rate.code],
       });
       continue;
     }
 
-    const existing = grouped.get(key);
-
-    // collect codes
+    // merge into existing
     existing.codes.push(rate.code);
 
-    // min: pick smallest (safe-guard with nullish)
+    // keep the highest course
+    existing.course = Math.max(existing.course, rate.course);
+
+    // merge min
     if (rate.min) {
-      if (existing.min == null) existing.min = { ...rate.min };
+      if (!existing.min) existing.min = { ...rate.min };
       else {
         existing.min.give = Math.min(
           existing.min.give ?? Infinity,
@@ -91,9 +90,9 @@ export const getCryptoToCurrencyRates = async ({
       }
     }
 
-    // max: pick largest
+    // merge max
     if (rate.max) {
-      if (existing.max == null) existing.max = { ...rate.max };
+      if (!existing.max) existing.max = { ...rate.max };
       else {
         existing.max.give = Math.max(
           existing.max.give ?? -Infinity,
@@ -106,7 +105,7 @@ export const getCryptoToCurrencyRates = async ({
       }
     }
 
-    // merge parameterCodes union
+    // merge parameterCodes
     existing.parameterCodes = Array.from(
       new Set([
         ...(existing.parameterCodes || []),
@@ -114,22 +113,20 @@ export const getCryptoToCurrencyRates = async ({
       ])
     );
 
-    // update last_time_updated to the most recent one
+    // last_time_updated = most recent
     existing.last_time_updated = Math.max(
       existing.last_time_updated || 0,
       rate.last_time_updated || 0
     );
-
-    // keep other top-level fields (name/admin_rating/logo/ref_link) from first occurrence — they should be identical per exchanger
   }
 
-  // Finalize -> array, dedupe codes and sort by course asc
-  const merged = Array.from(grouped.values()).map((item) => ({
+  // dedupe codes + sort by course asc
+  const final = merged.map((item) => ({
     ...item,
     codes: Array.from(new Set(item.codes)),
   }));
 
-  merged.sort((a, b) => a.course - b.course);
+  final.sort((a, b) => a.course - b.course);
 
-  return merged;
+  return final;
 };
