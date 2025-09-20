@@ -5,7 +5,7 @@ const getPossiblePairs = async ({
   code,
   side,
 }: {
-  code?: string;
+  code: string;
   side: "give" | "get";
 }) => {
   const allRatesID = (await getObject("allRatesID")) as IAllRatesID;
@@ -24,10 +24,9 @@ const getPossiblePairs = async ({
     if (!leftPm || !rightPm) continue;
 
     // Filter by side + code if provided
-    if (code) {
-      if (side === "give" && leftPm !== code) continue;
-      if (side === "get" && rightPm !== code) continue;
-    }
+
+    if (side === "give" && leftPm !== code) continue;
+    if (side === "get" && rightPm !== code) continue;
 
     if (side === "give") {
       if (!possiblePairs[leftPm]) possiblePairs[leftPm] = [];

@@ -238,6 +238,7 @@ server.get("/dirs", async (_, reply) => {
         {}
       );
       const sortedArray = Object.entries(totalRatesByDir)
+        .filter(([, value]) => value > Number(process.env.DIR_RATES_MIN || "3"))
         .sort(([, valueA], [, valueB]) => valueA - valueB)
         .reverse();
       return Object.fromEntries(sortedArray);
@@ -251,15 +252,16 @@ type possiblePairsReq = FastifyRequest<{
 }>;
 
 server.get(
-  "/possible_pairs/:side/:code?",
+  "/possible_pairs/:side/:code",
   async function (request: possiblePairsReq, reply) {
     reply.header("Access-Control-Allow-Origin", "*");
-    const param = request.params as { side: "give" | "get"; code?: string };
-    const code = param.code?.toUpperCase();
+    const param = request.params as { side: "give" | "get"; code: string };
+    const code = param.code.toUpperCase();
     const side = param.side;
+
     //const possiblePairs = await getPossiblePairs({ side });
     const possiblePairs = await toCache({
-      key: `possible_pairs_${code || "all"}_${side}`,
+      key: `possible_pairs_${side}_${code}`,
       ttl: 600 * 1000,
       getData: async () => getPossiblePairs({ side, code }),
     });
