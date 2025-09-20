@@ -291,17 +291,6 @@ server.get("/top", async function (_, reply) {
   reply.send(JSON.stringify(bestRates));
 });
 
-server.get("/popular_dirs", async function (_, reply) {
-  reply.header("Access-Control-Allow-Origin", "*");
-
-  const popularDirs = await toCache({
-    key: "top",
-    ttl: 600 * 1000,
-    getData: async () => (await getData("popular_dirs")) as IPopularDirs,
-  });
-  reply.send(JSON.stringify(popularDirs));
-});
-
 type ICryptoToCurrencyRequest = FastifyRequest<{
   Params: { code: string; currency: string; side: "give" | "get" };
 }>;
