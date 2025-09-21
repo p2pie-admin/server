@@ -18,7 +18,7 @@ export const getCryptoToCurrencyRates = async ({
     | undefined;
   if (!possiblePairs || !possiblePairs.length) return [];
 
-  const fiatPairs = possiblePairs.filter((p) => p.endsWith(currency));
+  const fiatPairs = possiblePairs.filter((p) => p.includes(currency));
   if (!fiatPairs.length) return [];
 
   const ratesByDir: { [dir: string]: IRate[] } = {};
