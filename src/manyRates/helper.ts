@@ -18,10 +18,6 @@ export const getPmsFromPmGroup = (
   return pm_group.options.map((option) => {
     const code = getOptionCode(option, pm_group?.prefix);
     const subgroup_name = option.name && option.name.toUpperCase();
-    const tag =
-      pm_group.options.length > 1
-        ? option.code?.toLocaleUpperCase() || option.currency.code.toUpperCase()
-        : undefined;
     const en_name = pm_group.en_name + " " + option?.currency?.code;
     const ru_name = pm_group.ru_name
       ? pm_group.ru_name + " " + option?.currency?.code
@@ -34,7 +30,6 @@ export const getPmsFromPmGroup = (
       currency: option?.currency, // USDT
       icon: pm_group.icon,
       color: pm_group.color,
-      tag,
       popular_as,
     };
   });

@@ -88,7 +88,6 @@ export const toCache = async ({
   if (cache.has(key)) {
     const cached = cache.get(key);
     if (now - cached.timestamp < ttl) {
-      console.log(`Got cache: ${key} | ${ttl / 1000}s`);
       return cached.data; // Return cached response
     }
   }

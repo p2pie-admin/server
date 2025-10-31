@@ -2,7 +2,7 @@ import { GraphQLClient } from "graphql-request";
 
 import normalizer from "./normalizer";
 import dotenv from "dotenv";
-import { getData, setData } from "../redis";
+import { getData } from "../redis";
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const strapiLink =
   env === "production" ? process.env.STRAPI! : process.env.DEV_STRAPI!;
 
 const callStrapi = async (query: any, variables?: any) => {
-  const jwt = getData("ratesJWT");
+  const jwt = await getData("parser_jwt");
   const headers = jwt
     ? {
         authorization: `Bearer ${jwt}`,

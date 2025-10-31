@@ -1,230 +1,313 @@
+// redis-store.ts
 import dotenv from "dotenv";
 import { createClient, RedisClientType } from "redis";
+dotenv.config();
 
 type RedisValue = string | number | object;
-type IDBName = "main" | "rates";
+const DEFAULT_TTL_SECONDS = 1000;
 
-dotenv.config();
+type LogLevel = "error" | "success" | "warning" | "important" | "info";
+const log = (message: string, level: LogLevel = "info") => {
+  const colors: Record<LogLevel, string> = {
+    error: "📕 \u001b[1;31m",
+    success: "📗 \u001b[1;32m",
+    warning: "📙 \u001b[1;33m",
+    info: "📘 \u001b[1;34m",
+    important: "📔 \u001b[38;5;226m",
+  };
+  console.log(`${colors[level]} ${message}`);
+};
 
 const env = process.env.NODE_ENV || "development";
 const port = process.env.REDIS_PORT || "6379";
 const host =
   env === "production"
-    ? process.env.PROD_REDIS_HOST || "redis"
-    : process.env.DEV_REDIS_HOST || "127.0.0.1";
+    ? process.env.PROD_REDIS_HOST
+    : process.env.DEV_REDIS_HOST;
 
-const mainDB = createClient({
+// ——— single DB / single client ———
+const db: RedisClientType = createClient({
   url: `redis://${host}:${port}/0`,
+  socket: {
+    reconnectStrategy: (retries) => {
+      log(`Redis reconnect attempt ${retries}`, "info");
+      return Math.min(retries * 100, 30_000);
+    },
+  },
 }) as RedisClientType;
 
-const ratesDB = createClient({
-  url: `redis://${host}:${port}/1`,
-}) as RedisClientType;
+let shuttingDown = false;
+let pendingOperations = 0;
 
-mainDB.connect().catch(() => console.log("Redis not responding!", "error"));
-ratesDB.connect().catch(console.error);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export const setData = async (
-  key: string,
-  value: RedisValue,
-  dbName: IDBName = "main",
-  NX: boolean = false
-) => {
+const trackOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
+  pendingOperations++;
   try {
-    const db = dbName === "rates" ? ratesDB : mainDB;
-    const strValue = JSON.stringify(value);
-
-    await (NX ? db.set(key, strValue, { NX: true }) : db.set(key, strValue));
-  } catch (error) {
-    console.error(`Error setting data for ${dbName}:`, error);
+    return await operation();
+  } finally {
+    pendingOperations--;
   }
 };
 
-// export const addData = async (
-//   key: string,
-//   value: RedisValue,
-//   dbName: IDBName = "main"
-// ) => {
-//   try {
-//     const db = dbName === "rates" ? ratesDB : mainDB;
-//     const prevValue = await getData(key, dbName);
-//     const newValue = prevValue?.length
-//       ? [...prevValue, value]
-//       : { ...prevValue, value };
-//     const strValue = JSON.stringify(newValue);
-//     await db.set(key, strValue);
-//   } catch (error) {
-//     console.error(`Error setting data for ${dbName}:`, error);
-//   }
-// };
+db.on("connect", () => {
+  log(`Redis connected at redis://${host}:${port}/0`, "info");
+});
+db.on("error", (err) => {
+  if (shuttingDown && err?.code === "ECONNRESET") return;
+  log(`Redis error: ${err.message}`, "error");
+});
+db.on("reconnecting", () => {
+  log(`Redis reconnecting...`, "warning");
+});
 
+export async function initializeRedis() {
+  if (!db.isOpen) await db.connect();
+}
+
+// автоинициализацию можно убрать, если хотите вызывать initializeRedis вручную
+initializeRedis();
+
+/* ================= helpers ================= */
+
+const toJSONString = (v: any): string =>
+  v === undefined
+    ? "null"
+    : typeof v === "string"
+    ? v
+    : typeof v === "number"
+    ? String(v)
+    : v === null
+    ? "null"
+    : JSON.stringify(v);
+
+const tryParseJSON = (v: string) => {
+  if (v === "null") return null;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v; // не JSON — вернём как строку
+  }
+};
+
+// Неблокирующий сбор ключей по паттерну через SCAN
+async function scanKeys(pattern: string, count = 500): Promise<string[]> {
+  const found: string[] = [];
+  for await (const key of db.scanIterator({ MATCH: pattern, COUNT: count })) {
+    found.push(key);
+  }
+  return found;
+}
+/* ================= 1) setObject =================
+ * Записывает "коллекцию" и раскидывает её на один уровень по ключам:
+ *  setObject("exchangers", { "123": {...}, "456": {...} })
+ *  создаст:
+ *   - exchangers:123 -> JSON(value)
+ *   - exchangers:456 -> JSON(value)
+ * Параметры:
+ *  - expireIn (default: 1000) — TTL сек на каждый созданный ключ
+ */
 export async function setObject(
   key: string,
-  object: Object, // Object containing keys and values
-  dbName: IDBName = "main"
+  object: Record<string, any>,
+  expireIn?: number
 ) {
   try {
-    const db = dbName === "rates" ? ratesDB : mainDB;
-
-    const redisData: { [key: string]: string } = {}; // Object for MSET
-
-    // Helper function to recursively flatten the object
-    function flattenObject(obj: any, parentKey: string) {
-      for (const [k, v] of Object.entries(obj)) {
-        const newKey = parentKey ? `${parentKey}:${k}` : k;
-
-        if (v === null || v === undefined) {
-          // Skip undefined or null values
-          continue;
-        }
-
-        if (Array.isArray(v) || typeof v === "object") {
-          // Recursively flatten objects and arrays
-          flattenObject(v, newKey);
-        } else {
-          // Store primitive values directly
-          redisData[newKey] = String(v);
-        }
-      }
+    if (shuttingDown) return;
+    if (!object || typeof object !== "object") {
+      console.error("setObject: 'object' must be a plain object");
+      return;
     }
 
-    // Start flattening from the top-level object
-    flattenObject(object, key);
+    await trackOperation(async () => {
+      const multi = db.multi();
+      const ttl =
+        expireIn === undefined || expireIn === null
+          ? DEFAULT_TTL_SECONDS
+          : expireIn;
+      const shouldExpire = ttl > 0;
 
-    // Use MSET to store all key-value pairs at once
-    await db.mSet(redisData);
-  } catch (error) {
-    console.error(`Error setting multiple data for ${dbName}:`, error);
+      for (const [subKey, val] of Object.entries(object)) {
+        const fullKey = `${key}:${subKey}`;
+        const strVal = toJSONString(val);
+
+        if (shouldExpire) {
+          multi.set(fullKey, strVal, { EX: ttl });
+        } else {
+          multi.set(fullKey, strVal);
+        }
+      }
+
+      const rootValue = toJSONString(object);
+      if (shouldExpire) {
+        multi.set(key, rootValue, { EX: ttl });
+      } else {
+        multi.set(key, rootValue);
+      }
+
+      await multi.exec();
+    });
+  } catch (error: any) {
+    if (shuttingDown && error?.code === "ECONNRESET") return;
+    console.error(`Error in setObject:`, error);
   }
 }
-export async function getObject(
+
+/* ================= 2) setData =================
+ * Универсальная запись ключ:значение как строку.
+ * Использование: setData("some_key", data, expireIn?).
+ * По умолчанию expireIn=1000. Передайте 0, чтобы записать без истечения.
+ */
+export const setData = async (
   key: string,
-  dbName: IDBName = "main"
-): Promise<Object | null> {
+  value: RedisValue,
+  expireIn?: number // seconds
+) => {
   try {
-    const db = dbName === "rates" ? ratesDB : mainDB;
+    if (shuttingDown) return;
+    await trackOperation(async () => {
+      const strValue = toJSONString(value);
+      const ttl =
+        expireIn === undefined || expireIn === null
+          ? DEFAULT_TTL_SECONDS
+          : expireIn;
 
-    // Check if the key has a wildcard or is intended as a specific path
-    const isPrefix = key.includes("*");
-    const redisKeys = isPrefix
-      ? await db.keys(`${key}`)
-      : await db.keys(`${key}:*`);
-
-    // If no keys found, return null
-    if (redisKeys.length === 0) {
-      return null;
-    }
-
-    // Get all values for the keys
-    const redisData = await db.mGet(redisKeys);
-
-    // Filter out null values and create a corresponding keys array
-    const filteredRedisData = redisData.filter(
-      (value: any): value is string => value !== null
-    );
-    const filteredRedisKeys = redisKeys.slice(0, filteredRedisData.length);
-
-    const result: { [key: string]: any } = {};
-
-    // Helper function to parse JSON strings safely
-    function parseJSON(value: string) {
-      try {
-        return JSON.parse(value);
-      } catch (e) {
-        return value; // If parsing fails, return the original string
+      if (ttl > 0) {
+        await db.set(key, strValue, { EX: ttl });
+      } else {
+        await db.set(key, strValue);
       }
+    });
+  } catch (error: any) {
+    if (shuttingDown && error?.code === "ECONNRESET") return;
+    console.error(`Error in setData:`, error);
+  }
+};
+
+/* ================= 3) getObject / getData =================
+ * getObject:
+ *  - если key вида "exchangers:123" — вернёт один элемент (JSON.parse)
+ *  - если key = "exchangers" — вернёт всю коллекцию как объект { "123": val, "456": val, ... }
+ * getData:
+ *  - читает произвольный ключ строкой и пытается распарсить JSON
+ */
+
+export async function getObject(key: string): Promise<object | null> {
+  try {
+    // если это точечный ключ (есть ':') — читаем один элемент
+    if (key.includes(":")) {
+      const val = await db.get(key);
+      return val === null ? null : tryParseJSON(val);
     }
 
-    // Helper function to reconstruct the object structure
-    function reconstructObject(keys: string[], values: string[]) {
-      for (let i = 0; i < keys.length; i++) {
-        const fullKey = keys[i];
-        const value = values[i];
-        const keyParts = fullKey.split(":");
+    const snapshot = await db.get(key);
+    if (snapshot !== null) {
+      return tryParseJSON(snapshot) as object;
+    }
 
-        // Build the nested structure
-        let currentLevel = result;
+    // иначе считаем, что это «корневой» ключ коллекции — соберём все key:*
+    const keys = await scanKeys(`${key}:*`);
+    if (keys.length === 0) return null;
 
-        for (let j = 0; j < keyParts.length; j++) {
-          const part = keyParts[j];
+    // MGET пачками для скорости
+    const result: Record<string, any> = {};
+    const chunkSize = 500;
+    for (let i = 0; i < keys.length; i += chunkSize) {
+      const batch = keys.slice(i, i + chunkSize);
+      const values = await db.mGet(batch);
 
-          // If we're at the last part, assign the parsed value
-          if (j === keyParts.length - 1) {
-            currentLevel[part] = parseJSON(value); // Parse the JSON here
+      for (let j = 0; j < batch.length; j++) {
+        const fullKey = batch[j];
+        const raw = values[j];
+        if (raw === null) continue;
+        // subKey — хвост после "root:"
+        const subKey = fullKey.slice(key.length + 1);
+        const parts = subKey.split(":");
+
+        let node: Record<string, any> = result;
+        for (let k = 0; k < parts.length; k++) {
+          const segment = parts[k];
+          if (k === parts.length - 1) {
+            node[segment] = tryParseJSON(raw);
           } else {
-            // If the part doesn't exist yet, create an object
-            if (!currentLevel[part]) {
-              currentLevel[part] = {};
-            }
-            currentLevel = currentLevel[part]; // Move deeper into the object
+            node[segment] = node[segment] ?? {};
+            node = node[segment];
           }
         }
       }
     }
-
-    // Reconstruct the object using the retrieved keys and filtered values
-    reconstructObject(filteredRedisKeys, filteredRedisData);
-
-    // Navigate to the specific key in the nested structure if not using prefix
-    if (!isPrefix) {
-      const keyParts = key.split(":");
-      let specificLevel = result;
-
-      for (const part of keyParts) {
-        if (!specificLevel[part]) {
-          return null; // If a part is missing, return null
-        }
-        specificLevel = specificLevel[part];
-      }
-
-      return specificLevel; // Return the nested object
-    }
-
-    return result[key]; // Return the reconstructed object for prefix cases
+    return result;
   } catch (error) {
-    console.error(`Error retrieving data for ${dbName}:`, error);
+    console.error(`Error in getObject:`, error);
     return null;
   }
 }
 
-export async function getData(key: string, dbName: IDBName = "main") {
+export async function getData(key: string) {
   try {
-    const db = dbName === "rates" ? ratesDB : mainDB;
     const value = await db.get(key);
     if (value === null) return null;
-    return JSON.parse(value);
-  } catch (error) {
-    console.error(`Error getting data for ${dbName}:`, error);
+    return tryParseJSON(value);
+  } catch (error: any) {
+    if (shuttingDown && error?.code === "ECONNRESET") return null;
+    console.error(`Error in getData:`, error);
     return null;
   }
 }
 
-export async function getKeys() {
-  const allKeys = await mainDB.keys("*");
-  const mainKeys = allKeys.map((key) => {
-    const parts = key.split(":");
-    return parts[0];
-  });
-  const uniqueKeys = new Set(mainKeys);
-  return Array.from(uniqueKeys);
+export async function getKeys(pattern = "*"): Promise<string[]> {
+  try {
+    const keys = await scanKeys(pattern);
+    const rootKeys = new Set<string>();
+
+    keys.forEach((key) => {
+      const root = key.includes(":") ? key.split(":")[0] : key;
+      rootKeys.add(root);
+    });
+
+    return Array.from(rootKeys).sort();
+  } catch (error) {
+    console.error(`Error in getKeys:`, error);
+    return [];
+  }
 }
 
-export function getFirstObjectEntry(
-  obj: Record<string, any>
-): Record<string, any> | null {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
-
-  const [firstKey, firstValue] = Object.entries(obj)[0] || [];
-  return firstKey !== undefined ? { [firstKey]: firstValue } : null;
+export function getFirstObjectEntry<T = unknown>(value: unknown): T | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, T>;
+  for (const key of Object.keys(record)) {
+    return record[key];
+  }
+  return null;
 }
 
-// Graceful shutdown for Redis connections
-process.on("SIGINT", async () => {
-  await mainDB.quit();
-  await ratesDB.quit();
-  console.log("Redis connections closed");
-  process.exit(0);
-});
+/* ================ shutdown ================ */
+const waitForPendingOperations = async (timeoutMs = 7000) => {
+  const start = Date.now();
+  while (pendingOperations > 0 && Date.now() - start < timeoutMs) {
+    await sleep(50);
+  }
+  if (pendingOperations > 0) {
+    log(
+      `Redis shutdown proceeded with ${pendingOperations} pending operations`,
+      "warning"
+    );
+  }
+};
 
-let localDB = {};
-export { localDB };
+const handleShutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    await waitForPendingOperations();
+    if (db.isOpen) await db.quit();
+    console.log("Redis connection closed");
+  } catch (error) {
+    console.error("Error while closing Redis connection", error);
+  } finally {
+    process.exit(0);
+  }
+};
+
+process.once("SIGINT", handleShutdown);
+process.once("SIGTERM", handleShutdown);

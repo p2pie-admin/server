@@ -13,13 +13,15 @@ export interface ICity {
   ru_country_name: string;
 }
 
-export interface ParserSetting {
-  dirs_disabled: string;
-  cities: { [key: string]: string };
-  filter_options: string;
-  SD_applied_from: number;
-  SD_best_rates: number;
-  SD_worst_rates: number;
+export interface IParserSetting {
+  pause_between_loops?: number;
+  dirs_disabled?: string;
+  cities?: ICity[];
+  filter_options?: unknown;
+  SD_applied_from?: number;
+  SD_best_rates?: number;
+  SD_worst_rates?: number;
+  [key: string]: unknown;
 }
 
 export type Timeouts = {
@@ -38,9 +40,9 @@ export interface DB {
   jwt: string;
   dirs: { [key: string]: DirData }; // отслеживаем какие направления популярны
   topCodes: string[];
-  parser_setting: ParserSetting;
+  parser_setting: IParserSetting;
   exchangers: IExchanger[];
   all_pm_codes_that_exist: string[][];
-  alternative_pm_codes: string[];
+  alternative_pm_codes: string[][];
   possible_pairs: { [key: string]: string[] };
 }

@@ -47,7 +47,7 @@ export const getCryptoToCurrencyRates = async ({
       if (m.exchangerId !== rate.exchangerId) return false;
       const diff =
         Math.abs(m.course - rate.course) / ((m.course + rate.course) / 2);
-      return diff < 0.01; // 1%
+      return diff < 0.05; // 1%
     });
 
     if (!existing) {

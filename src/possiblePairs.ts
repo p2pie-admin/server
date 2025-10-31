@@ -1,5 +1,5 @@
 import { getCleanDirRates, mylog } from "./helper";
-import { getObject, getData, setData } from "./redis";
+import { getObject } from "./redis";
 import { IAllRatesID, IRatesID } from "./types/rates";
 const getPossiblePairs = async ({
   code,

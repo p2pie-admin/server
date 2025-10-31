@@ -6,7 +6,7 @@ import path from "path";
 import fastifyStatic from "@fastify/static";
 import { IExchanger } from "./types/exchanger";
 import { IAllDirtyRates, IRate } from "./types/rates";
-import { ICity } from "./types";
+import { ICity, IParserSetting } from "./types";
 
 import { convertCitiesToSelector, getCleanDirRates, toCache } from "./helper";
 import { IPopularDirs } from "./types/pms";
@@ -108,6 +108,26 @@ server.get("/all_pm_codes_that_exist", async function (_, reply) {
   return reply.send(all_pm_codes_that_exist);
 });
 
+server.get("/alternative_pm_codes", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const alternative_pm_codes = await getData("alternative_pm_codes");
+  return reply.send(JSON.stringify(alternative_pm_codes));
+});
+
+server.get("/parser_setting", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const parserSetting = (await getData("parser_setting")) as
+    | IParserSetting
+    | null;
+  return reply.send(JSON.stringify(parserSetting));
+});
+
+server.get("/parser_jwt", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const token = await getData("parser_jwt");
+  return reply.send(JSON.stringify(token));
+});
+
 server.get("/exchangers", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
 
@@ -144,6 +164,24 @@ server.get("/exchanger=:idOrName", async function (request, reply) {
 server.get("/errors", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   reply.send(JSON.stringify(await getData("errors")));
+});
+
+server.get("/exchanger_stats", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const stats = await getObject("exchanger_stats");
+  reply.send(JSON.stringify(stats));
+});
+
+server.get("/stats", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const workerStats = await getObject("stats");
+  reply.send(JSON.stringify(workerStats));
+});
+
+server.get("/stats/memory_usage", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+  const memoryUsage = await getData("stats:memory_usage");
+  reply.send(JSON.stringify(memoryUsage));
 });
 
 server.get("/city_selector=:dir", async function (request, reply) {
