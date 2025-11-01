@@ -66,22 +66,16 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   const code = params.code.toUpperCase();
   const city = params.city?.toLowerCase();
   const type = params.type;
+  //const rates = await getData("allDirtyRates:ACRUB_AVAX:1200");
 
   const rates = await toCache({
     key: `rates_${code}_${city || "no-city"}_${type}`,
     ttl: 30 * 1000,
     getData: async () => {
-      const pause = await getData("parser_setting").then(
-        (data) => data?.pause_between_loops || 10
-      );
-      const ratesTTL =
-        process.env.NODE_ENV === "production" ? 1000 * (300 + pause) : 10 ** 10;
       const cleanDirRates = await getCleanDirRates(code, type);
       if (!cleanDirRates) return [];
-      const now = Date.now();
-      const newRates = Object.values(cleanDirRates).filter(
-        (r) => r.last_time_updated && now - r.last_time_updated < ratesTTL
-      );
+
+      const newRates = Object.values(cleanDirRates);
 
       if (!city) return newRates;
 
@@ -116,16 +110,10 @@ server.get("/alternative_pm_codes", async function (_, reply) {
 
 server.get("/parser_setting", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
-  const parserSetting = (await getData("parser_setting")) as
-    | IParserSetting
-    | null;
+  const parserSetting = (await getData(
+    "parser_setting"
+  )) as IParserSetting | null;
   return reply.send(JSON.stringify(parserSetting));
-});
-
-server.get("/parser_jwt", async function (_, reply) {
-  reply.header("Access-Control-Allow-Origin", "*");
-  const token = await getData("parser_jwt");
-  return reply.send(JSON.stringify(token));
 });
 
 server.get("/exchangers", async function (_, reply) {

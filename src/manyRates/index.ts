@@ -5,15 +5,20 @@ import { IPopularDirs } from "../types/pms";
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
   const cleanDirRates = await getCleanDirRates(dir, "part");
 
-  if (!cleanDirRates || Object.keys(cleanDirRates).length === 0) return;
+  if (!cleanDirRates.length) return;
 
-  const [_, rate] = [...Object.entries(cleanDirRates)].sort(
-    (r1, r2) => r1[1].course - r2[1].course
-  )[0];
+  const [bestRate] = [...cleanDirRates].sort(
+    (rateA, rateB) => rateA.course - rateB.course
+  );
+
+  if (!bestRate) return;
+
+  const course =
+    fiatIndex && bestRate.course !== 0 ? 1 / bestRate.course : bestRate.course;
 
   const best = {
-    exchangerId: rate.exchangerId,
-    course: fiatIndex ? 1 / rate.course : rate.course,
+    exchangerId: bestRate.exchangerId,
+    course,
     fiat: dir.split("_")[fiatIndex],
   };
 
@@ -30,11 +35,12 @@ export const getSimilarRates = async (dirs: string[]) => {
 const findBestCourseByDir = async (dir: string) => {
   const cleanDirRates = await getCleanDirRates(dir);
 
-  if (!cleanDirRates || Object.keys(cleanDirRates).length === 0) return;
-  const [_, rate] = [...Object.entries(cleanDirRates)].sort(
-    (r1, r2) => r1[1].course - r2[1].course
-  )[0];
-  return [rate.course, Object.keys(cleanDirRates).length];
+  if (!cleanDirRates.length) return;
+  const [bestRate] = [...cleanDirRates].sort(
+    (rateA, rateB) => rateA.course - rateB.course
+  );
+  if (!bestRate) return;
+  return [bestRate.course, cleanDirRates.length];
 };
 
 export const getPopularRates = async () => {

@@ -194,22 +194,15 @@ export const setData = async (
 
 export async function getObject(key: string): Promise<object | null> {
   try {
-    // если это точечный ключ (есть ':') — читаем один элемент
-    if (key.includes(":")) {
-      const val = await db.get(key);
-      return val === null ? null : tryParseJSON(val);
-    }
-
     const snapshot = await db.get(key);
     if (snapshot !== null) {
       return tryParseJSON(snapshot) as object;
     }
 
-    // иначе считаем, что это «корневой» ключ коллекции — соберём все key:*
+    // соберём ключи вида key:* чтобы восстановить объект
     const keys = await scanKeys(`${key}:*`);
     if (keys.length === 0) return null;
 
-    // MGET пачками для скорости
     const result: Record<string, any> = {};
     const chunkSize = 500;
     for (let i = 0; i < keys.length; i += chunkSize) {
@@ -220,9 +213,8 @@ export async function getObject(key: string): Promise<object | null> {
         const fullKey = batch[j];
         const raw = values[j];
         if (raw === null) continue;
-        // subKey — хвост после "root:"
         const subKey = fullKey.slice(key.length + 1);
-        const parts = subKey.split(":");
+        const parts = subKey.split(":").filter(Boolean);
 
         let node: Record<string, any> = result;
         for (let k = 0; k < parts.length; k++) {

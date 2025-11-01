@@ -1,4 +1,4 @@
-import { getObject } from "./redis";
+import { getData, getObject } from "./redis";
 import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
 import { IAllDirtyRates, IRate, IRatesID } from "./types/rates";
@@ -100,13 +100,28 @@ export const toCache = async ({
 export const getCleanDirRates = async (
   dir: string,
   type: "all" | "part" = "part"
-) => {
-  const dirtyDirRates = (await getObject(`allDirtyRates:${dir}`)) as {
-    [key: string]: IRate;
-  };
-  const ratesID = (await getObject(`allRatesID:${dir}`)) as IRatesID;
-  const clean = ratesID?.[type]?.map((id) => dirtyDirRates?.[id]);
-  return clean;
+): Promise<IRate[]> => {
+  const dirtyDirRates = (await getObject(`allDirtyRates:${dir}`)) as Record<
+    string,
+    IRate
+  > | null;
+  const ratesID = (await getData(`allRatesID:${dir}`)) as IRatesID | null;
+
+  if (!dirtyDirRates) {
+    return [];
+  }
+
+  const ids = ratesID?.[type];
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return Object.values(dirtyDirRates);
+  }
+
+  return ids.reduce<IRate[]>((acc, id) => {
+    const rate = dirtyDirRates[id];
+    if (rate) acc.push(rate);
+    return acc;
+  }, []);
 };
 
 export const mylog = (
