@@ -1,6 +1,6 @@
-import { getCleanDirRates, mylog } from "./helper";
+import { extractOrderedRateIds, mylog } from "./helper";
 import { getObject } from "./redis";
-import { IAllRatesID, IRatesID } from "./types/rates";
+import { IAllRatesID } from "./types/rates";
 const getPossiblePairs = async ({
   code,
   side,
@@ -17,8 +17,9 @@ const getPossiblePairs = async ({
   const possiblePairs: Record<string, string[]> = {};
 
   for (const dir in allRatesID) {
-    const { all } = allRatesID[dir];
-    if (!all || all.length < 3) continue;
+    const entries = allRatesID[dir];
+    const ids = extractOrderedRateIds(entries).map(({ id }) => id);
+    if (!ids.length || ids.length < 3) continue;
 
     const [leftPm, rightPm] = dir.split("_");
     if (!leftPm || !rightPm) continue;

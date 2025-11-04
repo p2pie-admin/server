@@ -79,10 +79,30 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
 
       if (!city) return newRates;
 
-      return newRates.reduce((res: IRate[], r) => {
-        const cityRate = r.cityRates?.[city.toLowerCase()];
-        if (!cityRate) return res;
-        return [...res, cityRate];
+      const cityKey = city.toLowerCase();
+
+      return newRates.reduce((res: IRate[], rate) => {
+        const cityRateEntry = rate.cityRates?.[cityKey];
+        if (!cityRateEntry) return res;
+
+        const cityRateData =
+          typeof cityRateEntry === "object" && cityRateEntry !== null
+            ? (cityRateEntry as any)
+            : undefined;
+
+        const normalizedEntry =
+          cityRateData && "rate" in cityRateData && cityRateData.rate
+            ? { ...cityRateData }
+            : { rate: cityRateEntry };
+
+        const sanitizedRate = {
+          ...(rate as unknown as Record<string, unknown>),
+          cityRates: {
+            [cityKey]: normalizedEntry,
+          },
+        } as unknown as IRate;
+
+        return [...res, sanitizedRate];
       }, []);
     },
   });
@@ -312,7 +332,7 @@ server.get("/top", async function (_, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const bestRates = await toCache({
     key: "top",
-    ttl: 2 * 60 * 1000,
+    ttl: 60 * 1000,
     getData: async () => await getPopularRates(),
   });
 

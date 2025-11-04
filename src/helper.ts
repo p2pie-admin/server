@@ -1,7 +1,7 @@
 import { getData, getObject } from "./redis";
 import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
-import { IAllDirtyRates, IRate, IRatesID } from "./types/rates";
+import { IAllDirtyRates, IRate, IRatesID, RatesIdEntry } from "./types/rates";
 import { cache } from "./index";
 
 const countryWeights = {
@@ -97,6 +97,34 @@ export const toCache = async ({
   return data;
 };
 
+export const extractOrderedRateIds = (
+  ratesID?: IRatesID | null
+): { id: string; tags: string[] }[] => {
+  if (!Array.isArray(ratesID)) return [];
+
+  const seen = new Set<string>();
+  const normalized: { id: string; tags: string[] }[] = [];
+
+  for (const entry of ratesID) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const record = entry as RatesIdEntry;
+    for (const [rawId, rawTags] of Object.entries(record)) {
+      const id = rawId?.trim();
+      if (!id || seen.has(id)) continue;
+
+      const tags = Array.isArray(rawTags)
+        ? rawTags.filter((tag): tag is string => typeof tag === "string")
+        : [];
+
+      normalized.push({ id, tags });
+      seen.add(id);
+    }
+  }
+
+  return normalized;
+};
+
 export const getCleanDirRates = async (
   dir: string,
   type: "all" | "part" = "part"
@@ -111,17 +139,33 @@ export const getCleanDirRates = async (
     return [];
   }
 
-  const ids = ratesID?.[type];
+  const normalizedIds = extractOrderedRateIds(ratesID);
 
-  if (!Array.isArray(ids) || ids.length === 0) {
+  if (!normalizedIds.length) {
     return Object.values(dirtyDirRates);
   }
 
-  return ids.reduce<IRate[]>((acc, id) => {
+  const prioritizedIds =
+    type === "part" ? normalizedIds.slice(0, 10) : normalizedIds;
+
+  const collected: IRate[] = [];
+  const used = new Set<string>();
+
+  for (const { id } of prioritizedIds) {
     const rate = dirtyDirRates[id];
-    if (rate) acc.push(rate);
-    return acc;
-  }, []);
+    if (!rate) continue;
+    collected.push(rate);
+    used.add(id);
+  }
+
+  if (type === "all" && collected.length < Object.keys(dirtyDirRates).length) {
+    for (const [id, rate] of Object.entries(dirtyDirRates)) {
+      if (used.has(id)) continue;
+      collected.push(rate);
+    }
+  }
+
+  return collected;
 };
 
 export const mylog = (
