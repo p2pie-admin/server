@@ -3,7 +3,7 @@ import { getData } from "../redis";
 import { IPopularDirs } from "../types/pms";
 
 const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const cleanDirRates = await getCleanDirRates(dir, "part");
+  const cleanDirRates = await getCleanDirRates(dir);
 
   if (!cleanDirRates.length) return;
 

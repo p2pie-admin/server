@@ -59,6 +59,23 @@ type dirReq = FastifyRequest<{
   Params: { code: string; city: string; type: "all" | "part" };
 }>;
 
+const getCitySelector = async (dir?: string) => {
+  return toCache({
+    key: `city_selector:${dir ?? "all"}`,
+    ttl: 2 * 60 * 60 * 1000,
+    getData: async () => {
+      const cities = (await getData("parser_setting"))?.cities as
+        | ICity[]
+        | undefined;
+      const allDirtyRates = (await getObject("allDirtyRates")) as
+        | IAllDirtyRates
+        | undefined;
+
+      return convertCitiesToSelector(dir, cities, allDirtyRates);
+    },
+  });
+};
+
 server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
 
@@ -72,12 +89,14 @@ server.get("/dir=:code/:type/:city?", async function (request: dirReq, reply) {
     key: `rates_${code}_${city || "no-city"}_${type}`,
     ttl: 30 * 1000,
     getData: async () => {
-      const cleanDirRates = await getCleanDirRates(code, type);
+      const cleanDirRates = await getCleanDirRates(code);
       if (!cleanDirRates) return [];
 
       const newRates = Object.values(cleanDirRates);
 
-      if (!city) return newRates;
+      if (!city) {
+        return newRates;
+      }
 
       const cityKey = city.toLowerCase();
 
@@ -192,22 +211,18 @@ server.get("/stats/memory_usage", async function (_, reply) {
   reply.send(JSON.stringify(memoryUsage));
 });
 
+server.get("/city_selector", async function (_, reply) {
+  reply.header("Access-Control-Allow-Origin", "*");
+
+  const citySelector = await getCitySelector();
+
+  reply.send(JSON.stringify(citySelector));
+});
+
 server.get("/city_selector=:dir", async function (request, reply) {
   reply.header("Access-Control-Allow-Origin", "*");
   const { dir } = request.params as { dir: string };
-  const citySelector = await toCache({
-    key: `city_selector`,
-    ttl: 2 * 60 * 60 * 1000,
-    getData: async () => {
-      const cities = (await getData("parser_setting"))?.cities as
-        | ICity[]
-        | undefined;
-      const allDirtyRates = (await getObject(
-        "allDirtyRates"
-      )) as IAllDirtyRates;
-      return convertCitiesToSelector(dir, cities, allDirtyRates);
-    },
-  });
+  const citySelector = await getCitySelector(dir);
 
   reply.send(JSON.stringify(citySelector));
 });

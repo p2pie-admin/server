@@ -26,7 +26,7 @@ export const getCryptoToCurrencyRates = async ({
     fiatPairs.map(async (fiatCode) => {
       const dir =
         side === "give" ? `${code}_${fiatCode}` : `${fiatCode}_${code}`;
-      const cleanDirRates = (await getCleanDirRates(dir, "all")) || [];
+      const cleanDirRates = (await getCleanDirRates(dir)) || [];
       ratesByDir[dir] = cleanDirRates;
     })
   );

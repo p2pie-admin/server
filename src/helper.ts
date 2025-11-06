@@ -16,24 +16,43 @@ const countryWeights = {
 } as any;
 
 export function convertCitiesToSelector(
-  dir: string,
+  dir?: string,
   cities?: ICity[],
   allDirtyRates?: IAllDirtyRates
 ): ISelectorCountry[] {
-  // Group cities by country
   const groupedByCountry: Record<string, ISelectorCountry> = {};
 
   if (!cities || !allDirtyRates) return [];
-  for (const city of cities) {
-    const totalCityRates = Object.values(allDirtyRates?.[dir])?.filter(
-      (r) =>
-        r.cityRates &&
-        Object.keys(r.cityRates).find(
-          (cityName) => cityName.toLowerCase() == city.en_name.toLowerCase()
-        )
-    ).length;
 
+  const relevantDirKeys = dir ? [dir] : Object.keys(allDirtyRates);
+  const cityRateCounts = new Map<string, number>();
+
+  for (const dirKey of relevantDirKeys) {
+    const dirRates = allDirtyRates[dirKey];
+    if (!dirRates) continue;
+
+    for (const rate of Object.values(dirRates)) {
+      const cityRates = rate?.cityRates;
+      if (!cityRates || typeof cityRates !== "object") continue;
+
+      for (const cityName of Object.keys(cityRates)) {
+        const normalizedName = cityName?.trim().toLowerCase();
+        if (!normalizedName) continue;
+
+        cityRateCounts.set(
+          normalizedName,
+          (cityRateCounts.get(normalizedName) || 0) + 1
+        );
+      }
+    }
+  }
+
+  for (const city of cities) {
+    const normalizedName = city.en_name.trim().toLowerCase();
+
+    const totalCityRates = cityRateCounts.get(normalizedName) ?? 0;
     if (totalCityRates < 2) continue; // убираем одиночек
+
     const countryKey = `${city.en_country_name}-${city.ru_country_name}`;
 
     if (!groupedByCountry[countryKey]) {
@@ -45,18 +64,14 @@ export function convertCitiesToSelector(
       };
     }
 
-    // Add city to the country's cities array
     groupedByCountry[countryKey].cities.push({
       en_name: city.en_name,
       ru_name: city.ru_name,
       population: city.population,
       totalCityRates,
     });
-
-    // Update the weight (sum of populations)
   }
 
-  // Convert grouped data into an array
   return Object.values(groupedByCountry);
 }
 
@@ -125,10 +140,7 @@ export const extractOrderedRateIds = (
   return normalized;
 };
 
-export const getCleanDirRates = async (
-  dir: string,
-  type: "all" | "part" = "part"
-): Promise<IRate[]> => {
+export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
   const dirtyDirRates = (await getObject(`allDirtyRates:${dir}`)) as Record<
     string,
     IRate
@@ -140,28 +152,44 @@ export const getCleanDirRates = async (
   }
 
   const normalizedIds = extractOrderedRateIds(ratesID);
+  const parameterCodesMap = new Map<string, string[]>();
 
-  if (!normalizedIds.length) {
-    return Object.values(dirtyDirRates);
+  for (const { id, tags } of normalizedIds) {
+    parameterCodesMap.set(id, [...tags]);
   }
 
-  const prioritizedIds =
-    type === "part" ? normalizedIds.slice(0, 10) : normalizedIds;
+  const attachParameterCodes = (id: string, rate: IRate): IRate => {
+    if (!parameterCodesMap.has(id)) {
+      return rate;
+    }
+
+    const codes = parameterCodesMap.get(id) ?? [];
+    return {
+      ...rate,
+      parameterCodes: [...codes],
+    };
+  };
+
+  if (!normalizedIds.length) {
+    return Object.entries(dirtyDirRates).map(([id, rate]) =>
+      attachParameterCodes(id, rate)
+    );
+  }
 
   const collected: IRate[] = [];
   const used = new Set<string>();
 
-  for (const { id } of prioritizedIds) {
+  for (const { id } of normalizedIds) {
     const rate = dirtyDirRates[id];
     if (!rate) continue;
-    collected.push(rate);
+    collected.push(attachParameterCodes(id, rate));
     used.add(id);
   }
 
-  if (type === "all" && collected.length < Object.keys(dirtyDirRates).length) {
+  if (collected.length < Object.keys(dirtyDirRates).length) {
     for (const [id, rate] of Object.entries(dirtyDirRates)) {
       if (used.has(id)) continue;
-      collected.push(rate);
+      collected.push(attachParameterCodes(id, rate));
     }
   }
 
