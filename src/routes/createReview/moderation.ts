@@ -1,7 +1,15 @@
 import { mylog } from "../../helper";
 import { callGPT, findPrompt } from "../../services/gpt";
-import { IReviewCheckResponse } from "../../types/review";
+import { IReviewCheckResponse, ReviewTone } from "../../types/review";
 import { ReviewMutationInput } from "./types";
+
+export type ModerationResult = {
+  approved: boolean;
+  response: IReviewCheckResponse | null;
+  rawResponse: unknown;
+};
+
+const ALLOWED_TONES: ReviewTone[] = ["negative", "positive", "neutral", "question"];
 
 const isValidGptResponse = (
   payload: unknown
@@ -11,7 +19,11 @@ const isValidGptResponse = (
   return (
     typeof data.isApproved === "boolean" &&
     typeof data.comment === "string" &&
-    typeof data.tone === "string"
+    typeof data.tone === "string" &&
+    ALLOWED_TONES.includes(data.tone as ReviewTone) &&
+    (typeof data.changedVersion === "string" ||
+      data.changedVersion === null ||
+      typeof data.changedVersion === "undefined")
   );
 };
 
@@ -32,7 +44,9 @@ const parseGptResponse = (
   return isValidGptResponse(payload) ? (payload as IReviewCheckResponse) : null;
 };
 
-export const runModeration = async (reviewInput: ReviewMutationInput) => {
+export const runModeration = async (
+  reviewInput: ReviewMutationInput
+): Promise<ModerationResult> => {
   const prompt = await findPrompt("review");
   if (!prompt) {
     throw new Error("no prompt found for review");
@@ -51,14 +65,21 @@ export const runModeration = async (reviewInput: ReviewMutationInput) => {
       "GPT response could not be parsed as JSON, proceeding without moderation data",
       "warning"
     );
-    return { approved: true, response: null as IReviewCheckResponse | null };
+    return {
+      approved: false,
+      response: null as IReviewCheckResponse | null,
+      rawResponse: rawGptResponse,
+    };
   }
 
   if (!gptResponse.isApproved) {
     mylog(`not approved: ${JSON.stringify(gptResponse)}`, "warning");
-    return { approved: false, response: gptResponse };
+  } else {
+    mylog(`${JSON.stringify(gptResponse, undefined, 4)}`, "important");
   }
-
-  mylog(`${JSON.stringify(gptResponse, undefined, 4)}`, "important");
-  return { approved: true, response: gptResponse };
+  return {
+    approved: gptResponse.isApproved,
+    response: gptResponse,
+    rawResponse: rawGptResponse,
+  };
 };

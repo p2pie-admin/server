@@ -8,8 +8,10 @@ export const hasTooManyReviews = async (
   logger: FastifyBaseLogger
 ) => {
   try {
+    const limit = +(process.env.ALLOWED_REVIEWS_PER_FINGERPRINT || 5) + 1;
     const existing = await callStrapi(ReviewByFingerprintQuery, {
       fingerprint,
+      limit,
     });
     const reviews = existing?.reviews;
     return (

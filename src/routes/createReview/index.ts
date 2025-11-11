@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { randomBytes } from "crypto";
 import { ClientError } from "graphql-request";
 
 import { mylog } from "../../helper";
@@ -10,6 +11,11 @@ import { attachIpAddress } from "./ipAddress";
 import { hasTooManyReviews } from "./duplicateGuard";
 import { runModeration } from "./moderation";
 import { ReviewRequest } from "./types";
+
+const makeFingerprintUnique = (fingerprint: string) => {
+  const suffix = randomBytes(4).toString("hex");
+  return `${fingerprint}_${suffix}`;
+};
 
 const registerCreateReviewRoute = (server: FastifyInstance) => {
   server.post("/createReview", async function (request: ReviewRequest, reply) {
@@ -26,7 +32,10 @@ const registerCreateReviewRoute = (server: FastifyInstance) => {
       return reply.send({ status: "ok" });
     }
 
-    const { data: reviewInput, error } = buildReviewInput(review);
+    const buildResult = buildReviewInput(review);
+    const reviewInput = buildResult.data;
+    const typeProvided = buildResult.meta?.typeProvided ?? false;
+    const error = buildResult.error;
     if (!reviewInput) {
       reply.status(400).send({
         status: "error",
@@ -36,11 +45,12 @@ const registerCreateReviewRoute = (server: FastifyInstance) => {
     }
 
     attachIpAddress(request, reviewInput);
+    const baseFingerprint = reviewInput.fingerprint;
 
     try {
       if (
-        reviewInput.fingerprint &&
-        (await hasTooManyReviews(reviewInput.fingerprint, server.log))
+        baseFingerprint &&
+        (await hasTooManyReviews(baseFingerprint, server.log))
       ) {
         mylog(
           `Review with fingerprint ${reviewInput.fingerprint} already exists, skipping creation`,
@@ -50,9 +60,24 @@ const registerCreateReviewRoute = (server: FastifyInstance) => {
       }
 
       const moderationResult = await runModeration(reviewInput);
-      if (!moderationResult.approved) {
-        return reply.send({ status: "ok" });
+      const gptResponse = moderationResult.response;
+
+      if (gptResponse) {
+        reviewInput.ai_data = gptResponse;
+        reviewInput.isApproved = gptResponse.isApproved;
+
+        if (typeof gptResponse.changedVersion === "string") {
+          reviewInput.text = gptResponse.changedVersion;
+        }
+
+        if (!typeProvided) {
+          reviewInput.type = gptResponse.tone;
+        }
+      } else {
+        reviewInput.isApproved = false;
       }
+
+      reviewInput.fingerprint = makeFingerprintUnique(baseFingerprint);
 
       const strapiResponse = await callStrapi(CreateReviewMutation, {
         data: reviewInput,
@@ -67,7 +92,6 @@ const registerCreateReviewRoute = (server: FastifyInstance) => {
       mylog(`Review created ${createdReview.id}`, "success");
       reply.send({
         status: "ok",
-        data: { id: createdReview.id },
       });
     } catch (err) {
       server.log.error(err, "Failed to create review");

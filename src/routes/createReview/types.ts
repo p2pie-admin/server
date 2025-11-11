@@ -1,6 +1,6 @@
 import { FastifyRequest } from "fastify";
 
-import { IReview } from "../../types/review";
+import { IReview, IReviewCheckResponse } from "../../types/review";
 
 export type ReviewRequest = FastifyRequest<{
   Body: Partial<IReview>;
@@ -16,4 +16,10 @@ export type ReviewMutationInput = {
   location?: string;
   ipAddress?: string;
   honeypot?: string;
+  ai_data?: IReviewCheckResponse;
+  isApproved?: boolean;
+};
+
+export type ReviewInputMeta = {
+  typeProvided: boolean;
 };

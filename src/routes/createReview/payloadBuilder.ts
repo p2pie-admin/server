@@ -1,5 +1,5 @@
 import { IReview } from "../../types/review";
-import { ReviewMutationInput } from "./types";
+import { ReviewInputMeta, ReviewMutationInput } from "./types";
 import { pickString } from "./utils";
 
 const REVIEW_TYPES: NonNullable<IReview["type"]>[] = [
@@ -10,9 +10,21 @@ const REVIEW_TYPES: NonNullable<IReview["type"]>[] = [
 ];
 const DEFAULT_REVIEW_TYPE: NonNullable<IReview["type"]> = "question";
 
+type BuildReviewInputResult =
+  | {
+      data: ReviewMutationInput;
+      meta: ReviewInputMeta;
+      error?: undefined;
+    }
+  | {
+    data?: undefined;
+    meta?: undefined;
+    error: string;
+  };
+
 export const buildReviewInput = (
   raw: Partial<IReview>
-): { data?: ReviewMutationInput; error?: string } => {
+): BuildReviewInputResult => {
   const text = pickString(raw.text);
   const exchangerId = pickString(raw.exchangerId);
   const fingerprint = pickString(raw.fingerprint);
@@ -21,14 +33,16 @@ export const buildReviewInput = (
     return { error: "Text, exchanger, and fingerprint are required" };
   }
 
+  const providedType =
+    raw.type && REVIEW_TYPES.includes(raw.type)
+      ? (raw.type as NonNullable<IReview["type"]>)
+      : undefined;
+
   const payload: ReviewMutationInput = {
     text,
     exchanger: exchangerId,
     fingerprint,
-    type:
-      raw.type && REVIEW_TYPES.includes(raw.type)
-        ? (raw.type as NonNullable<IReview["type"]>)
-        : DEFAULT_REVIEW_TYPE,
+    type: providedType ?? DEFAULT_REVIEW_TYPE,
   };
 
   if (typeof raw.isDispute === "boolean" || raw.isDispute === null) {
@@ -44,5 +58,5 @@ export const buildReviewInput = (
   const honeypot = pickString(raw.honeypot);
   if (honeypot) payload.honeypot = honeypot;
 
-  return { data: payload };
+  return { data: payload, meta: { typeProvided: Boolean(providedType) } };
 };

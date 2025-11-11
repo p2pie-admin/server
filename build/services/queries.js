@@ -37,18 +37,24 @@ exports.CreateReviewMutation = (0, graphql_request_1.gql) `
     createReview(data: $data) {
       data {
         id
+        attributes {
+          ai_data
+        }
       }
     }
   }
 `;
 exports.ReviewByFingerprintQuery = (0, graphql_request_1.gql) `
-  query ReviewByFingerprint($fingerprint: String) {
+  query ReviewByFingerprint($fingerprint: String, $limit: Int) {
     reviews(
       filters: { fingerprint: { eq: $fingerprint } }
-      pagination: { limit: 1 }
+      pagination: { limit: $limit }
     ) {
       data {
         id
+        attributes {
+          ai_data
+        }
       }
     }
   }

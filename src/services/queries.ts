@@ -37,19 +37,25 @@ export const CreateReviewMutation = gql`
     createReview(data: $data) {
       data {
         id
+        attributes {
+          ai_data
+        }
       }
     }
   }
 `;
 
 export const ReviewByFingerprintQuery = gql`
-  query ReviewByFingerprint($fingerprint: String) {
+  query ReviewByFingerprint($fingerprint: String, $limit: Int) {
     reviews(
       filters: { fingerprint: { eq: $fingerprint } }
-      pagination: { limit: +(process.env.ALLOWED_REVIEWS_PER_FINGERPRINT || 5) + 1 }
+      pagination: { limit: $limit }
     ) {
       data {
         id
+        attributes {
+          ai_data
+        }
       }
     }
   }
