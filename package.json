@@ -9,15 +9,17 @@
     "build": "rimraf ./build && tsc"
   },
   "dependencies": {
+    "@fastify/static": "^7.0.2",
     "axios": "^1.4.0",
     "chart.js": "^3",
+    "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "fastify": "^4.26.2",
-    "@fastify/static": "^7.0.2",
     "graphql": "^16.7.1",
     "graphql-request": "^6.1.0",
     "node-json-db": "^1.4.1",
+    "openai": "^6.8.1",
     "redis": "^4.7.0"
   },
   "devDependencies": {

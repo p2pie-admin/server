@@ -1,6 +1,8 @@
-import { gql } from "graphql-request";
-
-export const AuthMutation = gql`
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.citiesQuery = exports.CryptoForCoingeckoQuery = exports.PromptsQuery = exports.ReviewByFingerprintQuery = exports.CreateReviewMutation = exports.ChangeAccuracyMutation = exports.AuthMutation = void 0;
+const graphql_request_1 = require("graphql-request");
+exports.AuthMutation = (0, graphql_request_1.gql) `
   mutation login {
     login(
       input: {
@@ -17,8 +19,7 @@ export const AuthMutation = gql`
     }
   }
 `;
-
-export const ChangeAccuracyMutation = gql`
+exports.ChangeAccuracyMutation = (0, graphql_request_1.gql) `
   mutation UpdateCurrency($id: ID!, $accuracy: Int) {
     updateCurrency(id: $id, data: { accuracy: $accuracy }) {
       data {
@@ -31,8 +32,7 @@ export const ChangeAccuracyMutation = gql`
     }
   }
 `;
-
-export const CreateReviewMutation = gql`
+exports.CreateReviewMutation = (0, graphql_request_1.gql) `
   mutation CreateReview($data: ReviewInput!) {
     createReview(data: $data) {
       data {
@@ -41,12 +41,11 @@ export const CreateReviewMutation = gql`
     }
   }
 `;
-
-export const ReviewByFingerprintQuery = gql`
+exports.ReviewByFingerprintQuery = (0, graphql_request_1.gql) `
   query ReviewByFingerprint($fingerprint: String) {
     reviews(
       filters: { fingerprint: { eq: $fingerprint } }
-      pagination: { limit: +(process.env.ALLOWED_REVIEWS_PER_FINGERPRINT || 5) + 1 }
+      pagination: { limit: 1 }
     ) {
       data {
         id
@@ -54,8 +53,7 @@ export const ReviewByFingerprintQuery = gql`
     }
   }
 `;
-
-export const PromptsQuery = gql`
+exports.PromptsQuery = (0, graphql_request_1.gql) `
   {
     prompts(pagination: { limit: 2000 }) {
       data {
@@ -68,8 +66,7 @@ export const PromptsQuery = gql`
     }
   }
 `;
-
-export const CryptoForCoingeckoQuery = gql`
+exports.CryptoForCoingeckoQuery = (0, graphql_request_1.gql) `
   {
     selector {
       data {
@@ -112,8 +109,7 @@ export const CryptoForCoingeckoQuery = gql`
     }
   }
 `;
-
-export const citiesQuery = gql`
+exports.citiesQuery = (0, graphql_request_1.gql) `
   {
     parserSetting {
       data {

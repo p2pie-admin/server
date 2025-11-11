@@ -216,3 +216,9 @@ export const mylog = (
   };
   console.log(`${colors[color]} ${message}`);
 };
+
+export const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export const waitSec = (s: number) =>
+  new Promise((resolve) => setTimeout(resolve, s * 1000));
