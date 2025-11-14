@@ -111,6 +111,8 @@ const extractOrderedRateIds = (ratesID) => {
 exports.extractOrderedRateIds = extractOrderedRateIds;
 const getCleanDirRates = async (dir) => {
     const dirtyDirRates = (await (0, redis_1.getObject)(`allDirtyRates:${dir}`));
+    const exchangers = (await (0, redis_1.getObject)("exchangers"));
+    const exchangersList = exchangers ? Object.values(exchangers) : [];
     const ratesID = (await (0, redis_1.getData)(`allRatesID:${dir}`));
     if (!dirtyDirRates) {
         return [];
@@ -120,18 +122,36 @@ const getCleanDirRates = async (dir) => {
     for (const { id, tags } of normalizedIds) {
         parameterCodesMap.set(id, [...tags]);
     }
-    const attachParameterCodes = (id, rate) => {
-        if (!parameterCodesMap.has(id)) {
+    const resolveDisplayName = (rate) => {
+        if (rate.display_name !== undefined) {
+            return rate.display_name;
+        }
+        if (!exchangers)
+            return undefined;
+        const rawId = rate
+            .exchangerId;
+        if (rawId === undefined || rawId === null)
+            return undefined;
+        const idKey = String(rawId);
+        const exchanger = exchangers[idKey] ||
+            exchangers[String(Number(idKey))] ||
+            exchangersList.find((item) => item.id === idKey);
+        return exchanger?.display_name;
+    };
+    const enhanceRate = (id, rate) => {
+        const codes = parameterCodesMap.get(id);
+        const displayName = resolveDisplayName(rate);
+        if (!codes && displayName === undefined) {
             return rate;
         }
-        const codes = parameterCodesMap.get(id) ?? [];
         return {
             ...rate,
-            parameterCodes: [...codes],
+            ...(codes ? { parameterCodes: [...codes] } : {}),
+            ...(displayName !== undefined ? { display_name: displayName } : {}),
         };
     };
     if (!normalizedIds.length) {
-        return Object.entries(dirtyDirRates).map(([id, rate]) => attachParameterCodes(id, rate));
+        return Object.entries(dirtyDirRates).map(([id, rate]) => enhanceRate(id, rate));
     }
     const collected = [];
     const used = new Set();
@@ -139,14 +159,14 @@ const getCleanDirRates = async (dir) => {
         const rate = dirtyDirRates[id];
         if (!rate)
             continue;
-        collected.push(attachParameterCodes(id, rate));
+        collected.push(enhanceRate(id, rate));
         used.add(id);
     }
     if (collected.length < Object.keys(dirtyDirRates).length) {
         for (const [id, rate] of Object.entries(dirtyDirRates)) {
             if (used.has(id))
                 continue;
-            collected.push(attachParameterCodes(id, rate));
+            collected.push(enhanceRate(id, rate));
         }
     }
     return collected;

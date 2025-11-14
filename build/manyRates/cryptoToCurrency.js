@@ -42,6 +42,7 @@ const getCryptoToCurrencyRates = async ({ code, currency, side, }) => {
             merged.push({
                 exchangerId: rate.exchangerId,
                 name: rate.name,
+                display_name: rate.display_name,
                 admin_rating: rate.admin_rating,
                 logo: rate.logo,
                 course: rate.course,

@@ -3,6 +3,7 @@ import { ICity } from "./types";
 import { ISelectorCountry } from "./types/localTypes";
 import { IAllDirtyRates, IRate, IRatesID, RatesIdEntry } from "./types/rates";
 import { cache } from "./index";
+import { IExchanger } from "./types/exchanger";
 
 const countryWeights = {
   Russia: 5,
@@ -145,6 +146,10 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
     string,
     IRate
   > | null;
+  const exchangers = (await getObject("exchangers")) as
+    | Record<string, IExchanger>
+    | null;
+  const exchangersList = exchangers ? Object.values(exchangers) : [];
   const ratesID = (await getData(`allRatesID:${dir}`)) as IRatesID | null;
 
   if (!dirtyDirRates) {
@@ -158,21 +163,44 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
     parameterCodesMap.set(id, [...tags]);
   }
 
-  const attachParameterCodes = (id: string, rate: IRate): IRate => {
-    if (!parameterCodesMap.has(id)) {
+  const resolveDisplayName = (rate: IRate): string | null | undefined => {
+    if (rate.display_name !== undefined) {
+      return rate.display_name;
+    }
+
+    if (!exchangers) return undefined;
+
+    const rawId = (rate as IRate & { exchangerId?: string | number })
+      .exchangerId;
+    if (rawId === undefined || rawId === null) return undefined;
+
+    const idKey = String(rawId);
+    const exchanger =
+      exchangers[idKey] ||
+      exchangers[String(Number(idKey))] ||
+      exchangersList.find((item) => item.id === idKey);
+
+    return exchanger?.display_name;
+  };
+
+  const enhanceRate = (id: string, rate: IRate): IRate => {
+    const codes = parameterCodesMap.get(id);
+    const displayName = resolveDisplayName(rate);
+
+    if (!codes && displayName === undefined) {
       return rate;
     }
 
-    const codes = parameterCodesMap.get(id) ?? [];
     return {
       ...rate,
-      parameterCodes: [...codes],
+      ...(codes ? { parameterCodes: [...codes] } : {}),
+      ...(displayName !== undefined ? { display_name: displayName } : {}),
     };
   };
 
   if (!normalizedIds.length) {
     return Object.entries(dirtyDirRates).map(([id, rate]) =>
-      attachParameterCodes(id, rate)
+      enhanceRate(id, rate)
     );
   }
 
@@ -182,14 +210,14 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
   for (const { id } of normalizedIds) {
     const rate = dirtyDirRates[id];
     if (!rate) continue;
-    collected.push(attachParameterCodes(id, rate));
+    collected.push(enhanceRate(id, rate));
     used.add(id);
   }
 
   if (collected.length < Object.keys(dirtyDirRates).length) {
     for (const [id, rate] of Object.entries(dirtyDirRates)) {
       if (used.has(id)) continue;
-      collected.push(attachParameterCodes(id, rate));
+      collected.push(enhanceRate(id, rate));
     }
   }
 
