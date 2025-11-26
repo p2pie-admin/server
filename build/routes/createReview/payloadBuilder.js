@@ -28,12 +28,39 @@ const buildReviewInput = (raw) => {
     if (typeof raw.isDispute === "boolean" || raw.isDispute === null) {
         payload.isDispute = raw.isDispute;
     }
+    if (typeof raw.isExchangeDone === "boolean" || raw.isExchangeDone === null) {
+        payload.isExchangeDone = raw.isExchangeDone;
+    }
     const userAgent = (0, utils_1.pickString)(raw.userAgent);
     if (userAgent)
         payload.userAgent = userAgent;
     const location = (0, utils_1.pickString)(raw.location);
     if (location)
         payload.location = location;
+    const gossip = (0, utils_1.pickString)(raw.gossip);
+    if (gossip)
+        payload.gossip = gossip;
+    const rawCategories = raw.review_categories;
+    const categories = Array.isArray(rawCategories?.connect)
+        ? rawCategories.connect
+        : Array.isArray(rawCategories)
+            ? rawCategories
+            : undefined;
+    const normalizeCategoryId = (value) => {
+        if (value && typeof value === "object" && "id" in value) {
+            return normalizeCategoryId(value.id);
+        }
+        const strId = (0, utils_1.pickString)(value);
+        return strId ?? null;
+    };
+    const normalizedCategories = Array.isArray(categories)
+        ? categories
+            .map((categoryId) => normalizeCategoryId(categoryId))
+            .filter((id) => Boolean(id))
+        : undefined;
+    if (normalizedCategories?.length) {
+        payload.review_categories = normalizedCategories;
+    }
     const honeypot = (0, utils_1.pickString)(raw.honeypot);
     if (honeypot)
         payload.honeypot = honeypot;

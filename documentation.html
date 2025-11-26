@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>p2pie server — краткая документация</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.45; margin: 2rem; color: #111; }
+    h1, h2, h3 { color: #0b3954; }
+    code { background: #f5f5f5; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.98rem; }
+    th, td { border: 1px solid #d7d7d7; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: #f0f6fb; }
+    dl { display: grid; grid-template-columns: 280px 1fr; gap: 0.5rem 1.5rem; }
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>Модуль <code>server</code></h1>
+  <p>
+    Этот модуль представляет собой Fastify-приложение из монорепозитория p2pie, которое
+    отдаёт статический интерфейс, публикует JSON-API по данным обменников и направлениям обмена,
+    а также проксирует создание отзывов в headless CMS (Strapi) после AI-модерации.
+    Источником оперативных данных служит Redis, поверх которого построен собственный слой кэша в памяти.
+  </p>
+
+  <h2>Назначение модуля</h2>
+  <ul>
+    <li>поднять HTTP-сервер Fastify с логгером и статиками из каталога <code>public/</code>;</li>
+    <li>зарегистрировать все маршруты из <code>src/routes</code> (через <code>registerGeneralRoutes</code>) и эндпоинт создания отзывов;</li>
+    <li>прочитать бизнес-данные из Redis, нормализовать их (helpers) и отдавать внешним клиентам;</li>
+    <li>принимать отзывы пользователей, дополнять их IP-адресом, проверять количество дублей, пропускать через <code>runModeration</code>, а затем вызывать GraphQL-мутацию Strapi;</li>
+    <li>предоставлять вспомогательные отчёты (статистика воркеров, ошибки, список городов, популярные направления, крипто-курсы и т.д.).</li>
+  </ul>
+
+  <h2>Ключевые функции и утилиты</h2>
+  <dl>
+    <dt><code>registerGeneralRoutes(server)</code> (<code>src/routes/registrator.ts</code>)</dt>
+    <dd>Итерирует список файлов в <code>src/routes/*</code> и подключает обработчики GET-эндпоинтов (города, курсы, статистика, справочники).</dd>
+
+    <dt><code>registerCreateReviewRoute(server)</code> (<code>src/routes/createReview/index.ts</code>)</dt>
+    <dd>Регистрирует POST/OPTIONS <code>/createReview</code>, собирает валидированное тело (<code>buildReviewInput</code>), добавляет IP (<code>attachIpAddress</code>), проверяет лимиты (<code>hasTooManyReviews</code>), запускает AI-модерацию и вызывает <code>callStrapi(CreateReviewMutation)</code>.</dd>
+
+    <dt><code>getCitySelector(dir?)</code> (<code>src/routes/citySelector/utils.ts</code>)</dt>
+    <dd>Читает города и «грязные» курсы из Redis, передаёт их в <code>convertCitiesToSelector</code> и кэширует результат через <code>toCache</code>, чтобы строить «селектор города» по конкретному направлению или по всем сразу.</dd>
+
+    <dt><code>convertCitiesToSelector(...)</code>, <code>getDirRatesMin()</code>, <code>extractOrderedRateIds()</code>, <code>getCleanDirRates()</code> (<code>src/helper.ts</code>)</dt>
+    <dd>Помогают нормализовать курсы и отфильтровать их по весам стран/городов, дополнить параметрами обменников и отсортировать выдачу.</dd>
+
+    <dt><code>toCache({ key, ttl, getData })</code> (<code>src/helper.ts</code>)</dt>
+    <dd>Лёгкий in-memory кэш поверх <code>Map</code>, который снижает нагрузку на Redis/Strapi и переиспользуется практически во всех маршрутах.</dd>
+
+    <dt><code>initializeRedis</code>, <code>setObject</code>, <code>setData</code>, <code>getObject</code>, <code>getData</code>, <code>getKeys</code>, <code>getFirstObjectEntry</code> (<code>src/redis.ts</code>)</dt>
+    <dd>Инициализируют соединение с Redis, предоставляют универсальные функции чтения/записи коллекций, неблокирующее перечисление ключей и аккуратное завершение работы.</dd>
+
+    <dt><code>mylog()</code>, <code>sleep()</code>, <code>waitSec()</code> (<code>src/helper.ts</code>)</dt>
+    <dd>Утилитарные функции логирования и таймингов, которые используются во время фоновых операций (парсинг, модерация и т.п.).</dd>
+  </dl>
+
+  <h2>HTTP-маршруты и обработчики</h2>
+  <table>
+    <tr><th>Метод и путь</th><th>Обработчик</th><th>Назначение</th></tr>
+    <tr><td>GET /</td><td><code>homeHandler</code></td><td>Отдаёт <code>public/index.html</code> для браузера.</td></tr>
+    <tr><td>GET /example</td><td><code>exampleHandler</code></td><td>Показывает по одному образцу данных для каждого Redis-ключа (диагностика).</td></tr>
+    <tr><td>POST /createReply (+ OPTIONS)</td><td><code>createReplyHandler</code></td><td>Принимает ответы на отзывы, логирует тело запроса и возвращает <code>{ status: "ok" }</code> с включённым CORS.</td></tr>
+    <tr><td>GET /dir=<code>:code</code>/<code>:type</code>/<code>:city?</code></td><td><code>dirRatesHandler</code></td><td>Возвращает очищенные курсы направления, при необходимости срезанные по конкретному городу.</td></tr>
+    <tr><td>GET /top_codes</td><td><code>topCodesHandler</code></td><td>Список самых популярных кодов направлений из Redis.</td></tr>
+    <tr><td>GET /all_pm_codes_that_exist</td><td><code>allPmCodesHandler</code></td><td>Отдаёт справочник всех платёжных кодов, которые когда-либо встречались.</td></tr>
+    <tr><td>GET /alternative_pm_codes</td><td><code>alternativePmCodesHandler</code></td><td>JSON с допустимыми альтернативами кодов.</td></tr>
+    <tr><td>GET /parser_setting</td><td><code>parserSettingHandler</code></td><td>Текущие настройки парсеров (города, параметры) из Redis.</td></tr>
+    <tr><td>GET /exchangers</td><td><code>exchangersHandler</code></td><td>Полный перечень активных обменников.</td></tr>
+    <tr><td>GET /exchanger=<code>:idOrName</code></td><td><code>exchangerByIdHandler</code></td><td>Ищет обменник по числовому ID или по имени (case-insensitive).</td></tr>
+    <tr><td>GET /errors</td><td><code>errorsHandler</code></td><td>Журнал последних ошибок воркеров.</td></tr>
+    <tr><td>GET /exchanger_stats</td><td><code>exchangerStatsHandler</code></td><td>Агрегированные показатели обменников (доля аптайма, количество заявок и т.д.).</td></tr>
+    <tr><td>GET /stats</td><td><code>statsHandler</code></td><td>Статистика фоновых воркеров/парсеров.</td></tr>
+    <tr><td>GET /stats/memory_usage</td><td><code>statsMemoryHandler</code></td><td>Замеры использования памяти воркеров.</td></tr>
+    <tr><td>GET /city_selector</td><td><code>citySelectorHandler</code></td><td>Общий селектор стран/городов, где есть релевантные курсы.</td></tr>
+    <tr><td>GET /city_selector=<code>:dir</code></td><td><code>citySelectorByDirHandler</code></td><td>Селектор городов только для указанного направления обмена.</td></tr>
+    <tr><td>GET /cities</td><td><code>citiesHandler</code></td><td>Исходный список городов из настроек парсера.</td></tr>
+    <tr><td>GET /non_empty_cities</td><td><code>nonEmptyCitiesHandler</code></td><td>Города, по которым реально есть активные курсы (с подсчётом по каждому dir).</td></tr>
+    <tr><td>GET /city=<code>:name</code></td><td><code>cityByNameHandler</code></td><td>Выдаёт карточку конкретного города по его английскому названию.</td></tr>
+    <tr><td>GET /dirs</td><td><code>dirsHandler</code></td><td>Сводка по всем направлениям с количеством курсов (фильтрация по <code>getDirRatesMin()</code>).</td></tr>
+    <tr><td>GET /possible_pairs/<code>:side</code>/<code>:code</code></td><td><code>possiblePairsHandler</code></td><td>Список допустимых пар для выбранного актива и стороны (give/get).</td></tr>
+    <tr><td>GET /similar/dirs=<code>:dirsString</code></td><td><code>similarDirsHandler</code></td><td>Ищет похожие направления для перечня dir-кодов.</td></tr>
+    <tr><td>GET /top</td><td><code>topHandler</code></td><td>Популярные курсы (best rates) на основе <code>getPopularRates()</code>.</td></tr>
+    <tr><td>GET /crypto=<code>:code</code>/<code>:currency</code>/<code>:side</code></td><td><code>cryptoHandler</code></td><td>Конвертация криптовалюты в фиат и обратно с помощью <code>getCryptoToCurrencyRates()</code>.</td></tr>
+    <tr><td>POST /createReview (+ OPTIONS)</td><td><code>createReview</code> handler</td><td>Принимает отзывы, отбрасывает honeypot, запускает модерацию и создаёт запись в Strapi (ответ <code>{ status: "ok" }</code> или ошибка).</td></tr>
+  </table>
+
+  <h2>Поведение по умолчанию</h2>
+  <ul>
+    <li>Все ответы, кроме главной страницы, возвращаются в формате JSON и снабжены заголовком <code>Access-Control-Allow-Origin: *</code>.</li>
+    <li>Часто запрашиваемые ресурсы проходят через <code>toCache</code>, а данные origin'а хранятся в Redis (ключи вида <code>allDirtyRates</code>, <code>exchangers</code>, <code>stats</code> и т.д.).</li>
+    <li>При завершении процесса сервер аккуратно закрывает соединение с Redis, дождавшись завершения всех операций.</li>
+  </ul>
+</body>
+</html>

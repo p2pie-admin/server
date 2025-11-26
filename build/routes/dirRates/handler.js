@@ -20,7 +20,7 @@ const dirRatesHandler = async (request, reply) => {
                 return newRates;
             }
             const cityKey = city.toLowerCase();
-            return newRates.reduce((res, rate) => {
+            const ratesWithCity = newRates.reduce((res, rate) => {
                 const cityRateEntry = rate.cityRates?.[cityKey];
                 if (!cityRateEntry)
                     return res;
@@ -38,6 +38,20 @@ const dirRatesHandler = async (request, reply) => {
                 };
                 return [...res, sanitizedRate];
             }, []);
+            const getCityRateValue = (rate) => {
+                const entry = (rate.cityRates?.[cityKey] ?? {});
+                const cityRate = entry?.rate ?? entry;
+                const rawCourse = cityRate?.course ?? cityRate;
+                const num = Number(rawCourse);
+                return Number.isFinite(num) ? num : Number.POSITIVE_INFINITY;
+            };
+            return ratesWithCity
+                .map((rate, idx) => ({ rate, idx }))
+                .sort((a, b) => {
+                const diff = getCityRateValue(a.rate) - getCityRateValue(b.rate);
+                return diff !== 0 ? diff : a.idx - b.idx;
+            })
+                .map((item) => item.rate);
         },
     });
     reply.send(JSON.stringify(rates));

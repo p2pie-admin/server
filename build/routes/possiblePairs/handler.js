@@ -13,7 +13,7 @@ const possiblePairsHandler = async (request, reply) => {
     const side = param.side;
     const possiblePairs = await (0, helper_1.toCache)({
         key: `possible_pairs_${side}_${code}`,
-        ttl: 600 * 1000,
+        ttl: 60 * 1000,
         getData: async () => (0, possiblePairs_1.default)({ side, code }),
     });
     return reply.send(JSON.stringify(possiblePairs));

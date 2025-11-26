@@ -26,10 +26,10 @@ exports.getSimilarRates = getSimilarRates;
 const findBestCourseByDir = async (dir) => {
     const cleanDirRates = await (0, helper_1.getCleanDirRates)(dir);
     if (!cleanDirRates.length)
-        return;
+        return [];
     const [bestRate] = [...cleanDirRates].sort((rateA, rateB) => rateA.course - rateB.course);
     if (!bestRate)
-        return;
+        return [];
     return [bestRate.course, cleanDirRates.length];
 };
 const getPopularRates = async () => {

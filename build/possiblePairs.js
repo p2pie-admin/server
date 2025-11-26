@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const helper_1 = require("./helper");
 const redis_1 = require("./redis");
 const getPossiblePairs = async ({ code, side, }) => {
+    const dirRatesMin = (0, helper_1.getDirRatesMin)();
     const allRatesID = (await (0, redis_1.getObject)("allRatesID"));
     if (!allRatesID) {
         (0, helper_1.mylog)("[dirsExistHandler] No dirs exist yet!", "warning");
@@ -11,8 +12,8 @@ const getPossiblePairs = async ({ code, side, }) => {
     const possiblePairs = {};
     for (const dir in allRatesID) {
         const entries = allRatesID[dir];
-        const ids = (0, helper_1.extractOrderedRateIds)(entries).map(({ id }) => id);
-        if (!ids.length || ids.length < 3)
+        const ids = (0, helper_1.extractOrderedRateIds)(entries);
+        if (!ids.length || ids.length < dirRatesMin)
             continue;
         const [leftPm, rightPm] = dir.split("_");
         if (!leftPm || !rightPm)

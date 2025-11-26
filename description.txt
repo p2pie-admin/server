@@ -1,0 +1,424 @@
+Fastify route inventory & data contracts (generated for GPT consumers)
+===================================================================
+All handlers live under `src/routes`. Request/response types are taken from `src/types/*`. Every route automatically adds `Access-Control-Allow-Origin: *` unless noted. Sample payloads below are synthetic but adhere to the declared interfaces.
+
+GET /
+-----
+- Handler: `src/routes/home/handler.ts`
+- Purpose: serves the static SPA entry point from `public/index.html` via `reply.sendFile`.
+- Request: none.
+- Response type: HTML document.
+- Example response `<html lang="en">…</html>`
+
+GET /example
+------------
+- Handler: `src/routes/example/handler.ts`
+- Purpose: debug helper that iterates through all Redis keys and returns one sample value per key.
+- Request: none.
+- Response type: `{ key: string; sample: unknown }[]`
+- Example:
+```json
+[
+  {
+    "key": "allDirtyRates",
+    "sample": {
+      "BTC_USDT": {
+        "exchangerId": "859",
+        "course": 0.00958
+      }
+    }
+  },
+  {
+    "key": "parser_setting",
+    "sample": {
+      "dirs_disabled": "",
+      "cities": [
+        { "en_name": "Istanbul", "codes": ["IST"] }
+      ]
+    }
+  }
+]
+```
+
+POST /createReply  (OPTIONS supported)
+-------------------------------------
+- Handler: `src/routes/createReply/handler.ts`
+- Purpose: accepts moderator replies to reviews and simply logs payloads (no persistence yet).
+- Request body type: `Record<string, unknown>` (`JsonBodyRequest`).
+- Response type: `{ status: "ok" }`
+- Example request:
+```json
+{ "reviewId": "clx9q1", "text": "Thanks for the update" }
+```
+- Example response:
+```json
+{ "status": "ok" }
+```
+- OPTIONS handler echoes CORS headers with empty body + 204 status.
+
+POST /createReview  (OPTIONS supported)
+--------------------------------------
+- Handler: `src/routes/createReview/index.ts`
+- Purpose: validates and forwards user reviews to Strapi after GPT moderation.
+- Request body type: `Partial<IReview>` (`src/types/review.ts`). Key fields:
+  - `text: string` — review body (required)
+  - `exchangerId: string` — Strapi exchanger id (required)
+  - `fingerprint: string` — browser fingerprint (required)
+  - Optional `type`, `isDispute`, `userAgent`, `location`, `honeypot` etc.
+- Processing outline:
+  1. Honeypot rejection via `pickString`.
+  2. Build `ReviewMutationInput` (see `payloadBuilder.ts`).
+  3. Attach IP from `x-forwarded-for` or `request.ip`.
+  4. Reject repeated fingerprints via `hasTooManyReviews`.
+  5. Run GPT moderation (`runModeration`) with prompt from Strapi; attaches `ai_data` / `isApproved`.
+  6. Call GraphQL `CreateReviewMutation` via `callStrapi`.
+- Success response:
+```json
+{ "status": "ok" }
+```
+- Error response example (bad payload):
+```json
+{
+  "status": "error",
+  "message": "Text, exchanger, and fingerprint are required"
+}
+```
+- Error response example (Strapi error):
+```json
+{
+  "status": "error",
+  "message": "Failed to create review",
+  "code": "BAD_USER_INPUT"
+}
+```
+
+GET /dir=:code/:type/:city?
+---------------------------
+- Handler: `src/routes/dirRates/handler.ts`
+- Purpose: returns normalized rates (`IRate[]`, `src/types/rates.ts`) for a direction code such as `BTC_USDT`. Optional `:city` narrows rates to a city entry.
+- Params:
+  - `code` — direction key (uppercased internally).
+  - `type` — "all" or "part" (currently informational, always returns all rates).
+  - `city` (optional) — city slug; when provided only `cityRates[city]` entries are returned.
+- Response example (`IRate` slice):
+```json
+[
+  {
+    "exchangerId": "859",
+    "name": "CryptoBox",
+    "display_name": "CryptoBox",
+    "tag": "trusted",
+    "admin_rating": 4.23,
+    "course": 0.009589,
+    "parameterCodes": ["CASH","VIP"],
+    "min": { "give": 47.94, "get": 5000 },
+    "max": { "give": 7797.71, "get": 813162 },
+    "reserve": { "give": 7797.71, "get": 813162 },
+    "cityRates": {
+      "istanbul": { "rate": 0.0092, "min": { "give": 1000 } }
+    },
+    "ref_link": "https://cryptobox.pro/",
+    "last_time_updated": 1727203258316
+  }
+]
+```
+
+GET /top_codes
+--------------
+- Handler: `src/routes/topCodes/handler.ts`
+- Response type: `string[]` (Redis key `top_codes`).
+- Example: `{"0": "USDTTRC20", "1": "BTC"}` if stored as array or JSON string (Fastify serializes automatically).
+
+GET /all_pm_codes_that_exist
+-----------------------------
+- Handler: `src/routes/allPmCodes/handler.ts`
+- Response type: `string[][]` (see `DB['all_pm_codes_that_exist']`).
+- Example:
+```json
+[
+  ["USDTTRC20", "USDT", "TRC-20"],
+  ["CASHRUB", "RUB", "Cash"],
+  ["SBERRUB", "RUB", "Sberbank"]
+]
+```
+
+GET /alternative_pm_codes
+-------------------------
+- Handler: `src/routes/alternativePmCodes/handler.ts`
+- Response type: JSON stringified `string[][]` (legacy behavior).
+- Example body (note the double stringification):
+```
+"[[\"BTC\",\"XBT\"],[\"SBERRUB\",\"SBER\"]]"
+```
+
+GET /parser_setting
+-------------------
+- Handler: `src/routes/parserSetting/handler.ts`
+- Response type: `IParserSetting` (`src/types/index.ts`).
+- Example:
+```json
+{
+  "pause_between_loops": 300,
+  "dirs_disabled": "",
+  "cities": [
+    {
+      "codes": ["IST"],
+      "en_name": "Istanbul",
+      "ru_name": "Стамбул",
+      "population": 15462452,
+      "coordinates": [41.0082, 28.9784],
+      "preposition": "in",
+      "closest_cities": [
+        { "en_name": "Ankara", "ru_name": "Анкара" }
+      ],
+      "en_country_name": "Turkey",
+      "ru_country_name": "Турция"
+    }
+  ],
+  "SD_best_rates": 5,
+  "SD_worst_rates": 1
+}
+```
+
+GET /exchangers
+---------------
+- Handler: `src/routes/exchangers/handler.ts`
+- Response type: `Record<string, IExchanger>` (`src/types/exchanger.ts`).
+- Example:
+```json
+{
+  "859": {
+    "id": "859",
+    "name": "cryptobox",
+    "display_name": "CryptoBox",
+    "status": "active",
+    "rates_link": "https://cryptobox.pro/api",
+    "ref_link": "https://cryptobox.pro/",
+    "tag": "trusted",
+    "logo": { "url": "/uploads/cryptobox.jpg", "alternativeText": "CryptoBox" },
+    "total_rates": 120,
+    "admin_rating": 4.23,
+    "info": { "rates": 32 },
+    "warnings": { "AML": "Requires passport" }
+  }
+}
+```
+
+GET /exchanger=:idOrName
+------------------------
+- Handler: `src/routes/exchangerById/handler.ts`
+- Params: `:idOrName` matches Redis key (id) or case-insensitive exchanger name.
+- Response type: `IExchanger | {}` or the string `"no exchangers exist"` when Redis is empty.
+- Example: same payload as `/exchangers` but for a single entry.
+
+GET /errors
+-----------
+- Handler: `src/routes/errors/handler.ts`
+- Response type: whatever is stored at Redis key `errors` (usually `{ [dir: string]: string[] }`).
+- Example:
+```json
+{
+  "BTC_USD": ["ENOTFOUND", "Timeout"],
+  "SBERRUB_TCSBRUB": ["data-error"]
+}
+```
+
+GET /exchanger_stats
+--------------------
+- Handler: `src/routes/exchangerStats/handler.ts`
+- Response type: JSON object from Redis `exchanger_stats` (per-exchanger run counters / errors).
+- Example:
+```json
+{
+  "859": { "lastSuccessTs": 1727201100, "errorsToday": 0 },
+  "1201": { "lastSuccessTs": 1727198800, "errorsToday": 3 }
+}
+```
+
+GET /stats
+----------
+- Handler: `src/routes/stats/handler.ts`
+- Response type: object stored at Redis `stats` (worker telemetry such as parser uptime, queue sizes, etc.).
+- Example:
+```json
+{
+  "parser": { "status": "ok", "lastLoop": 1727203320 },
+  "notifier": { "status": "lagging", "pending": 42 }
+}
+```
+
+GET /stats/memory_usage
+-----------------------
+- Handler: `src/routes/statsMemory/handler.ts`
+- Response type: Node memory snapshot kept at Redis key `stats:memory_usage`.
+- Example:
+```json
+{
+  "rss": 185257984,
+  "heapTotal": 112345600,
+  "heapUsed": 75632100,
+  "external": 987654
+}
+```
+
+GET /city_selector
+------------------
+- Handler: `src/routes/citySelector/handler.ts`
+- Purpose: builds aggregated selector data for all cities having ≥2 city-specific rates.
+- Response type: `ISelectorCountry[]` (`src/types/localTypes.ts`). Cached for 2h via `toCache`.
+- Example:
+```json
+[
+  {
+    "en_country_name": "Turkey",
+    "ru_country_name": "Турция",
+    "weight": 2,
+    "cities": [
+      { "en_name": "Istanbul", "ru_name": "Стамбул", "population": 15462452, "totalCityRates": 38 },
+      { "en_name": "Ankara", "ru_name": "Анкара", "population": 5445026, "totalCityRates": 7 }
+    ]
+  }
+]
+```
+
+GET /city_selector=:dir
+-----------------------
+- Handler: `src/routes/citySelectorByDir/handler.ts`
+- Params: `:dir` (e.g. `BTC_USDT`).
+- Response type: same as `/city_selector`, but filtered to cities that have rates for the specified direction.
+- Example: same structure as above but only cities participating in `BTC_USDT`.
+
+GET /cities
+-----------
+- Handler: `src/routes/cities/handler.ts`
+- Response type: `ICity[]` (from parser setting).
+- Example: identical city objects as in `/parser_setting`.
+
+GET /city=:name
+---------------
+- Handler: `src/routes/cityByName/handler.ts`
+- Params: `:name` (case-insensitive English city name).
+- Response type: `ICity | null`.
+- Example: full `ICity` object for `Istanbul`.
+
+GET /non_empty_cities
+---------------------
+- Handler: `src/routes/nonEmptyCities/handler.ts`
+- Purpose: maps cities that currently have any `cityRates` entries, grouped by direction.
+- Response type: `Record<string, Record<string, number>>` where keys are lowercase city names and values are `{ [dir]: totalRates }`.
+- Example:
+```json
+{
+  "istanbul": {
+    "BTC_USDT": 12,
+    "ETH_USDT": 4
+  },
+  "dubai": {
+    "USDT_AEDCASH": 6
+  }
+}
+```
+
+GET /dirs
+---------
+- Handler: `src/routes/dirs/handler.ts`
+- Purpose: returns directions that have at least `DIR_RATES_MIN` exchangers (env-controlled, default 3).
+- Response type: `Record<string, number>` sorted descending by value (number of exchangers that currently have rates for the dir).
+- Example:
+```json
+{
+  "BTC_USDT": 42,
+  "USDTTRC20_CASHRUB": 27,
+  "ETH_USDT": 15
+}
+```
+
+GET /possible_pairs/:side/:code
+--------------------------------
+- Handler: `src/routes/possiblePairs/handler.ts`
+- Params:
+  - `side`: `give` or `get`.
+  - `code`: pm code (uppercased internally).
+- Response type: `string[]` (list of counterparty codes) fetched via `getPossiblePairs`.
+- Example (`/possible_pairs/give/USDTTRC20`):
+```json
+["CASHRUB", "SBERRUB", "BTC", "ETH"]
+```
+
+GET /similar/dirs=:dirsString
+-----------------------------
+- Handler: `src/routes/similarDirs/handler.ts`
+- Params: `dirsString` is a comma-separated list like `BTC_SBERRUB,BTC_TCSBRUB`.
+- Response type: `Array<[number, number] | null>` where each tuple is `[bestCourse, totalRates]` from `getSimilarRates`. Entries can be `null` if the dir has no data.
+- Example:
+```json
+[
+  [0.0521, 128],
+  [0.0518, 64]
+]
+```
+
+GET /top
+--------
+- Handler: `src/routes/top/handler.ts`
+- Purpose: returns popular buy/sell rates per cryptocurrency using `getPopularRates`.
+- Response type: `Record<string, { buy: BestRate[]; sell: BestRate[] }>` where `BestRate = { exchangerId?: string; course: number; fiat: string }`.
+- Example:
+```json
+{
+  "BTC": {
+    "buy": [
+      { "exchangerId": "859", "course": 66450, "fiat": "USD" }
+    ],
+    "sell": [
+      { "exchangerId": "1201", "course": 67500, "fiat": "RUB" }
+    ]
+  }
+}
+```
+
+GET /crypto=:code/:currency/:side
+---------------------------------
+- Handler: `src/routes/crypto/handler.ts`
+- Params: `code` (crypto, e.g. `BTC`), `currency` (fiat code, e.g. `RUB`), `side` (`give`/`get`).
+- Response type: array of merged rates from `getCryptoToCurrencyRates`, each shaped as:
+```
+{
+  exchangerId?: string;
+  name: string;
+  display_name?: string | null;
+  admin_rating?: number | null;
+  logo?: { url: string; alternativeText?: string };
+  course: number;
+  parameterCodes: string[];
+  ref_link?: string;
+  last_time_updated?: number;
+  min?: Limit | null;
+  max?: Limit | null;
+  codes: string[];
+}
+```
+- Example:
+```json
+[
+  {
+    "exchangerId": "859",
+    "name": "cryptobox",
+    "display_name": "CryptoBox",
+    "admin_rating": 4.23,
+    "course": 90.3,
+    "parameterCodes": ["CASH"],
+    "ref_link": "https://cryptobox.pro/",
+    "last_time_updated": 1727203000,
+    "min": { "give": 1000, "get": 95000 },
+    "max": { "give": 100000, "get": 9500000 },
+    "codes": ["RUB", "KZT"]
+  }
+]
+```
+
+Summary of supporting Redis keys & TTLs
+---------------------------------------
+- `getCitySelector` caches for 2h (`city_selector:all` or `city_selector:<dir>`).
+- Rates-based endpoints (`/dir`, `/possible_pairs`, `/top`, `/crypto`, `/dirs`) cache between 30–60 seconds via `toCache`.
+- All other GET routes read straight from Redis and serialize as-is.

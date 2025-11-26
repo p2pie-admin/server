@@ -21,6 +21,7 @@ const registerCreateReviewRoute = (server) => {
     server.post("/createReview", async function (request, reply) {
         reply.header("Access-Control-Allow-Origin", "*");
         const review = request.body ?? {};
+        (0, helper_1.mylog)(`/createReview body: ${JSON.stringify(review)}`, "important");
         server.log.info({ review }, "Received /createReview payload");
         const honeypotValue = (0, utils_1.pickString)(review.honeypot);
         if (honeypotValue) {

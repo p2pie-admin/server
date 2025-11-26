@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.waitSec = exports.sleep = exports.mylog = exports.getCleanDirRates = exports.extractOrderedRateIds = exports.toCache = exports.convertCitiesToSelector = void 0;
+exports.waitSec = exports.sleep = exports.mylog = exports.getCleanDirRates = exports.extractOrderedRateIds = exports.toCache = exports.convertCitiesToSelector = exports.getDirRatesMin = void 0;
 const redis_1 = require("./redis");
 const index_1 = require("./index");
 const countryWeights = {
@@ -13,6 +13,11 @@ const countryWeights = {
     Armenia: 2,
     Uzbekistan: 2,
 };
+const getDirRatesMin = () => {
+    const parsed = Number(process.env.DIR_RATES_MIN);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+};
+exports.getDirRatesMin = getDirRatesMin;
 function convertCitiesToSelector(dir, cities, allDirtyRates) {
     const groupedByCountry = {};
     if (!cities || !allDirtyRates)

@@ -16,6 +16,11 @@ const countryWeights = {
   Uzbekistan: 2,
 } as any;
 
+export const getDirRatesMin = () => {
+  const parsed = Number(process.env.DIR_RATES_MIN);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+};
+
 export function convertCitiesToSelector(
   dir?: string,
   cities?: ICity[],

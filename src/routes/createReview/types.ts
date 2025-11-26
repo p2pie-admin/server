@@ -12,10 +12,13 @@ export type ReviewMutationInput = {
   fingerprint: string;
   type: NonNullable<IReview["type"]>;
   isDispute?: boolean | null;
+  isExchangeDone?: boolean | null;
   userAgent?: string;
   location?: string;
   ipAddress?: string;
   honeypot?: string;
+  gossip?: string;
+  review_categories?: string[];
   ai_data?: IReviewCheckResponse;
   isApproved?: boolean;
 };

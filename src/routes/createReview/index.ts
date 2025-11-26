@@ -21,6 +21,7 @@ const registerCreateReviewRoute = (server: FastifyInstance) => {
   server.post("/createReview", async function (request: ReviewRequest, reply) {
     reply.header("Access-Control-Allow-Origin", "*");
     const review = request.body ?? {};
+    mylog(`/createReview body: ${JSON.stringify(review)}`, "important");
     server.log.info({ review }, "Received /createReview payload");
 
     const honeypotValue = pickString(review.honeypot);

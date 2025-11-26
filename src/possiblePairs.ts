@@ -1,4 +1,4 @@
-import { extractOrderedRateIds, mylog } from "./helper";
+import { extractOrderedRateIds, getDirRatesMin, mylog } from "./helper";
 import { getObject } from "./redis";
 import { IAllRatesID } from "./types/rates";
 const getPossiblePairs = async ({
@@ -8,6 +8,7 @@ const getPossiblePairs = async ({
   code: string;
   side: "give" | "get";
 }) => {
+  const dirRatesMin = getDirRatesMin();
   const allRatesID = (await getObject("allRatesID")) as IAllRatesID;
   if (!allRatesID) {
     mylog("[dirsExistHandler] No dirs exist yet!", "warning");
@@ -18,8 +19,8 @@ const getPossiblePairs = async ({
 
   for (const dir in allRatesID) {
     const entries = allRatesID[dir];
-    const ids = extractOrderedRateIds(entries).map(({ id }) => id);
-    if (!ids.length || ids.length < 3) continue;
+    const ids = extractOrderedRateIds(entries);
+    if (!ids.length || ids.length < dirRatesMin) continue;
 
     const [leftPm, rightPm] = dir.split("_");
     if (!leftPm || !rightPm) continue;

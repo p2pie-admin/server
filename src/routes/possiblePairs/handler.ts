@@ -18,7 +18,7 @@ export const possiblePairsHandler = async (
 
   const possiblePairs = await toCache({
     key: `possible_pairs_${side}_${code}`,
-    ttl: 600 * 1000,
+    ttl: 60 * 1000,
     getData: async () => getPossiblePairs({ side, code }),
   });
 
