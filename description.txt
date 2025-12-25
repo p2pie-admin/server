@@ -207,7 +207,7 @@ GET /exchangers
 GET /exchanger=:idOrName
 ------------------------
 - Handler: `src/routes/exchangerById/handler.ts`
-- Params: `:idOrName` matches Redis key (id) or case-insensitive exchanger name.
+- Params: `:idOrName` matches Redis key (id) or case-insensitive exchanger name/display_name.
 - Response type: `IExchanger | {}` or the string `"no exchangers exist"` when Redis is empty.
 - Example: same payload as `/exchangers` but for a single entry.
 

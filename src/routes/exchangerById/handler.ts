@@ -21,7 +21,10 @@ export const exchangerByIdHandler = async (
       exchangers && Object.keys(exchangers).length
         ? exchangers[idOrName] ||
             Object.values(exchangers).find(
-              (e) => e.name.toLocaleLowerCase() === idOrName.toLocaleLowerCase()
+              (e) =>
+                e.name.toLocaleLowerCase() === idOrName.toLocaleLowerCase() ||
+                (e.display_name || "").toLocaleLowerCase() ===
+                  idOrName.toLocaleLowerCase()
             ) ||
             {}
         : "no exchangers exist"

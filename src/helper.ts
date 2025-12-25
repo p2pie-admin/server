@@ -169,11 +169,12 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
   }
 
   const resolveDisplayName = (rate: IRate): string | null | undefined => {
-    if (rate.display_name !== undefined) {
-      return rate.display_name;
+    const current = rate.display_name;
+    if (typeof current === "string" && current.trim() !== "") {
+      return current;
     }
 
-    if (!exchangers) return undefined;
+    if (!exchangers) return current;
 
     const rawId = (rate as IRate & { exchangerId?: string | number })
       .exchangerId;
@@ -185,7 +186,7 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
       exchangers[String(Number(idKey))] ||
       exchangersList.find((item) => item.id === idKey);
 
-    return exchanger?.display_name;
+    return exchanger?.display_name ?? current;
   };
 
   const enhanceRate = (id: string, rate: IRate): IRate => {
@@ -217,13 +218,6 @@ export const getCleanDirRates = async (dir: string): Promise<IRate[]> => {
     if (!rate) continue;
     collected.push(enhanceRate(id, rate));
     used.add(id);
-  }
-
-  if (collected.length < Object.keys(dirtyDirRates).length) {
-    for (const [id, rate] of Object.entries(dirtyDirRates)) {
-      if (used.has(id)) continue;
-      collected.push(enhanceRate(id, rate));
-    }
   }
 
   return collected;

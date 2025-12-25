@@ -69,7 +69,7 @@
     <tr><td>GET /alternative_pm_codes</td><td><code>alternativePmCodesHandler</code></td><td>JSON с допустимыми альтернативами кодов.</td></tr>
     <tr><td>GET /parser_setting</td><td><code>parserSettingHandler</code></td><td>Текущие настройки парсеров (города, параметры) из Redis.</td></tr>
     <tr><td>GET /exchangers</td><td><code>exchangersHandler</code></td><td>Полный перечень активных обменников.</td></tr>
-    <tr><td>GET /exchanger=<code>:idOrName</code></td><td><code>exchangerByIdHandler</code></td><td>Ищет обменник по числовому ID или по имени (case-insensitive).</td></tr>
+    <tr><td>GET /exchanger=<code>:idOrName</code></td><td><code>exchangerByIdHandler</code></td><td>Ищет обменник по числовому ID или по имени/display_name (case-insensitive).</td></tr>
     <tr><td>GET /errors</td><td><code>errorsHandler</code></td><td>Журнал последних ошибок воркеров.</td></tr>
     <tr><td>GET /exchanger_stats</td><td><code>exchangerStatsHandler</code></td><td>Агрегированные показатели обменников (доля аптайма, количество заявок и т.д.).</td></tr>
     <tr><td>GET /stats</td><td><code>statsHandler</code></td><td>Статистика фоновых воркеров/парсеров.</td></tr>
