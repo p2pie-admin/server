@@ -63,7 +63,13 @@ const findBestRateByDir = async (dir: string, fiatIndex: number) => {
 
 export const getSimilarRates = async (dirs: string[], city?: string) => {
   const results = await Promise.all(
-    dirs.map((dir) => findBestCourseByDir(dir, city))
+    dirs.map(async (dir) => {
+      try {
+        return await findBestCourseByDir(dir, city);
+      } catch {
+        return null;
+      }
+    })
   );
   return results;
 };
@@ -71,11 +77,11 @@ export const getSimilarRates = async (dirs: string[], city?: string) => {
 const findBestCourseByDir = async (dir: string, city?: string) => {
   const cleanDirRates = withCityForCashDir(await getCleanDirRates(dir), dir, city);
 
-  if (!cleanDirRates.length) return;
+  if (!cleanDirRates.length) return null;
   const [bestRate] = [...cleanDirRates].sort(
     (rateA, rateB) => rateA.course - rateB.course
   );
-  if (!bestRate) return;
+  if (!bestRate) return null;
   return [bestRate.course, cleanDirRates.length];
 };
 

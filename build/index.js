@@ -14,6 +14,7 @@ dotenv_1.default.config();
 exports.cache = new Map(); // In-memory cache
 const server = (0, fastify_1.default)({
     logger: true,
+    maxParamLength: 1000,
 });
 server.register(static_1.default, {
     root: path_1.default.join(__dirname, "../public"), // Path to your public directory

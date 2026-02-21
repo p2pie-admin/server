@@ -11,6 +11,7 @@ export const cache = new Map(); // In-memory cache
 
 const server = Fastify({
   logger: true,
+  maxParamLength: 1000,
 });
 
 server.register(fastifyStatic, {

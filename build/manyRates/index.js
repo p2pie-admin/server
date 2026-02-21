@@ -48,17 +48,24 @@ const findBestRateByDir = async (dir, fiatIndex) => {
     return best;
 };
 const getSimilarRates = async (dirs, city) => {
-    const results = await Promise.all(dirs.map((dir) => findBestCourseByDir(dir, city)));
+    const results = await Promise.all(dirs.map(async (dir) => {
+        try {
+            return await findBestCourseByDir(dir, city);
+        }
+        catch {
+            return null;
+        }
+    }));
     return results;
 };
 exports.getSimilarRates = getSimilarRates;
 const findBestCourseByDir = async (dir, city) => {
     const cleanDirRates = withCityForCashDir(await (0, helper_1.getCleanDirRates)(dir), dir, city);
     if (!cleanDirRates.length)
-        return;
+        return null;
     const [bestRate] = [...cleanDirRates].sort((rateA, rateB) => rateA.course - rateB.course);
     if (!bestRate)
-        return;
+        return null;
     return [bestRate.course, cleanDirRates.length];
 };
 const getPopularRates = async () => {
