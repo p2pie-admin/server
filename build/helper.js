@@ -128,11 +128,12 @@ const getCleanDirRates = async (dir) => {
         parameterCodesMap.set(id, [...tags]);
     }
     const resolveDisplayName = (rate) => {
-        if (rate.display_name !== undefined) {
-            return rate.display_name;
+        const current = rate.display_name;
+        if (typeof current === "string" && current.trim() !== "") {
+            return current;
         }
         if (!exchangers)
-            return undefined;
+            return current;
         const rawId = rate
             .exchangerId;
         if (rawId === undefined || rawId === null)
@@ -141,7 +142,7 @@ const getCleanDirRates = async (dir) => {
         const exchanger = exchangers[idKey] ||
             exchangers[String(Number(idKey))] ||
             exchangersList.find((item) => item.id === idKey);
-        return exchanger?.display_name;
+        return exchanger?.display_name ?? current;
     };
     const enhanceRate = (id, rate) => {
         const codes = parameterCodesMap.get(id);
@@ -166,13 +167,6 @@ const getCleanDirRates = async (dir) => {
             continue;
         collected.push(enhanceRate(id, rate));
         used.add(id);
-    }
-    if (collected.length < Object.keys(dirtyDirRates).length) {
-        for (const [id, rate] of Object.entries(dirtyDirRates)) {
-            if (used.has(id))
-                continue;
-            collected.push(enhanceRate(id, rate));
-        }
     }
     return collected;
 };

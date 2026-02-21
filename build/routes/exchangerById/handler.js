@@ -8,7 +8,9 @@ const exchangerByIdHandler = async (request, reply) => {
     const exchangers = (await (0, redis_1.getObject)("exchangers"));
     reply.send(JSON.stringify(exchangers && Object.keys(exchangers).length
         ? exchangers[idOrName] ||
-            Object.values(exchangers).find((e) => e.name.toLocaleLowerCase() === idOrName.toLocaleLowerCase()) ||
+            Object.values(exchangers).find((e) => e.name.toLocaleLowerCase() === idOrName.toLocaleLowerCase() ||
+                (e.display_name || "").toLocaleLowerCase() ===
+                    idOrName.toLocaleLowerCase()) ||
             {}
         : "no exchangers exist"));
 };
