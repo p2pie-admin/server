@@ -6,7 +6,8 @@ import { IAllRatesID } from "../types/rates";
 // Shape of parser's `exchanger_stats:<id>` entries (see parser/src/types/exchanger.ts).
 type IExchangerStats = {
   skip?: number;
-  error?: string;
+  // parser writes `{}` on success and { code, autoMessage, comment } on failure
+  error?: string | { code?: string; autoMessage?: string; comment?: string } | null;
   total_rates?: number;
   warning?: string[];
   time?: number;
@@ -37,6 +38,15 @@ export type ExchangerHistoryPoint = {
   ok: 0 | 1; // 1 = rates fetched without error
   n: number; // rates served
   e?: string | null; // error code when down
+};
+
+// Parser stores `{}` as "no error"; only a non-empty object or a non-empty string means the exchanger is down.
+export const errorCode = (error: IExchangerStats["error"]): string | null => {
+  if (!error) return null;
+  if (typeof error === "string") return error.trim() ? error.slice(0, 40) : null;
+  if (typeof error !== "object" || !Object.keys(error).length) return null;
+  const code = error.code || error.autoMessage || error.comment || "ERROR";
+  return String(code).slice(0, 40);
 };
 
 const median = (values: number[]) => {
@@ -111,11 +121,12 @@ export const collectHistorySnapshot = async (): Promise<{
   let storedExchangers = 0;
   for (const id of Object.keys(exchangers)) {
     const stat = stats[id] || {};
+    const e = errorCode(stat.error);
     const point: ExchangerHistoryPoint = {
       t,
-      ok: stat.error ? 0 : 1,
+      ok: e ? 0 : 1,
       n: Number(stat.total_rates) || 0,
-      e: stat.error ? String(stat.error).slice(0, 40) : null,
+      e,
     };
     await pushListJSON(EXCHANGER_HISTORY_KEY(id), point, HISTORY_POINTS_MAX);
     storedExchangers++;
