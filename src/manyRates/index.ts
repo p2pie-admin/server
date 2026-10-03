@@ -38,8 +38,12 @@ const withCityForCashDir = (rates: IRate[], dir: string, city?: string): IRate[]
   }, []);
 };
 
-const findBestRateByDir = async (dir: string, fiatIndex: number) => {
-  const cleanDirRates = await getCleanDirRates(dir);
+const findBestRateByDir = async (
+  dir: string,
+  fiatIndex: number,
+  city?: string
+) => {
+  const cleanDirRates = withCityForCashDir(await getCleanDirRates(dir), dir, city);
 
   if (!cleanDirRates.length) return;
 
@@ -56,9 +60,29 @@ const findBestRateByDir = async (dir: string, fiatIndex: number) => {
     exchangerId: bestRate.exchangerId,
     course,
     fiat: dir.split("_")[fiatIndex],
+    exchangers: cleanDirRates.length,
   };
 
   return best;
+};
+
+const countUniqueExchangersByDirs = async (dirs: string[], city?: string) => {
+  const ratesByDir = await Promise.all(
+    dirs.map(async (dir) =>
+      withCityForCashDir(await getCleanDirRates(dir), dir, city)
+    )
+  );
+
+  const unique = new Set<string>();
+
+  for (const rates of ratesByDir) {
+    for (const rate of rates) {
+      if (rate?.exchangerId === undefined || rate.exchangerId === null) continue;
+      unique.add(String(rate.exchangerId));
+    }
+  }
+
+  return unique.size;
 };
 
 export const getSimilarRates = async (dirs: string[], city?: string) => {
@@ -85,18 +109,22 @@ const findBestCourseByDir = async (dir: string, city?: string) => {
   return [bestRate.course, cleanDirRates.length];
 };
 
-export const getPopularRates = async () => {
+export const getPopularRates = async (city?: string) => {
   const popularDirs = (await getData("popular_dirs")) as IPopularDirs;
 
   const res = await Object.entries(popularDirs).reduce(
     async (accPromise, [cryptoCode, sides]) => {
       const acc = await accPromise;
-      const [buyCourses, sellCourses] = await Promise.all([
-        Promise.all(sides.buy.map((dir) => findBestRateByDir(dir, 0))),
-        Promise.all(sides.sell.map((dir) => findBestRateByDir(dir, 1))),
+      const [buyCourses, sellCourses, total] = await Promise.all([
+        Promise.all(sides.buy.map((dir) => findBestRateByDir(dir, 0, city))),
+        Promise.all(sides.sell.map((dir) => findBestRateByDir(dir, 1, city))),
+        countUniqueExchangersByDirs([...sides.buy, ...sides.sell], city),
       ]);
 
-      return { ...acc, [cryptoCode]: { buy: buyCourses, sell: sellCourses } };
+      return {
+        ...acc,
+        [cryptoCode]: { buy: buyCourses, sell: sellCourses, total },
+      };
     },
     Promise.resolve({})
   );
