@@ -264,6 +264,43 @@ export async function getKeys(pattern = "*"): Promise<string[]> {
   }
 }
 
+/* ================= lists (history series) =================
+ * pushListJSON: append a JSON point to a capped list (oldest entries are dropped).
+ * getListJSON: read the newest `count` points (oldest first).
+ */
+export const pushListJSON = async (
+  key: string,
+  value: RedisValue,
+  maxLen: number
+) => {
+  try {
+    if (shuttingDown) return;
+    await trackOperation(async () => {
+      const multi = db.multi();
+      multi.rPush(key, toJSONString(value));
+      if (maxLen > 0) multi.lTrim(key, -maxLen, -1);
+      await multi.exec();
+    });
+  } catch (error: any) {
+    if (shuttingDown && error?.code === "ECONNRESET") return;
+    console.error(`Error in pushListJSON:`, error);
+  }
+};
+
+export const getListJSON = async <T = unknown>(
+  key: string,
+  count: number
+): Promise<T[]> => {
+  try {
+    const raw = await db.lRange(key, count > 0 ? -count : 0, -1);
+    return raw.map((item) => tryParseJSON(item) as T);
+  } catch (error: any) {
+    if (shuttingDown && error?.code === "ECONNRESET") return [];
+    console.error(`Error in getListJSON:`, error);
+    return [];
+  }
+};
+
 export function getFirstObjectEntry<T = unknown>(value: unknown): T | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, T>;

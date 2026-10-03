@@ -24,9 +24,11 @@ import registerPossiblePairsRoute from "./possiblePairs";
 import registerSimilarDirsRoute from "./similarDirs";
 import registerTopRoute from "./top";
 import registerCryptoRoute from "./crypto";
+import registerHistoryRoute from "./history";
 
 const registerGeneralRoutes = (server: FastifyInstance) => {
   const registerFns = [
+    registerHistoryRoute,
     registerHomeRoute,
     registerExampleRoute,
     registerCreateReplyRoute,

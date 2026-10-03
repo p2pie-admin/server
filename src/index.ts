@@ -4,6 +4,7 @@ import path from "path";
 import fastifyStatic from "@fastify/static";
 import registerCreateReviewRoute from "./routes/createReview";
 import registerGeneralRoutes from "./routes/registrator";
+import { startHistoryCollector } from "./history/collector";
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ const port = +process.env.RATES_PORT! || 5000;
 const start = async () => {
   try {
     await server.listen({ port, host: "0.0.0.0" });
+    startHistoryCollector();
     //await auth();
   } catch (error) {
     server.log.error(error);
